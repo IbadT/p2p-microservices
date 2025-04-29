@@ -1,98 +1,795 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+создать модели для базы данных
+написать все grpc методы
+написать документацию
+написать api для client
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-## Project setup
 
-```bash
-$ npm install
-```
 
-## Compile and run the project
 
-```bash
-# development
-$ npm run start
 
-# watch mode
-$ npm run start:dev
 
-# production mode
-$ npm run start:prod
-```
 
-## Run tests
 
-```bash
-# unit tests
-$ npm run test
 
-# e2e tests
-$ npm run test:e2e
+# маршруты для клиента
 
-# test coverage
-$ npm run test:cov
-```
+Создание Exchange Offer HTTP: POST /api/p2p/exchange-offers Request Body (JSON):
+{
+  "customer_id": "customer_123",
+  "listing_id": "listing_456",
+  "amount": 100.0,
+  "exchange_type": "CRYPTO2FIAT",
+  "conditions": "Обмен по курсу X, лимит 10-100"
+}
+response: {
+  "offer_id": "offer_789",
+  "status": "PENDING",
+  "message": "Exchange offer created successfully"
+}
 
-## Deployment
+Назначение: Инициирует сделку, блокируя средства у Customer'а и создавая запись с начальным статусом.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Ответ на Exchange Offer Exchanger’ом HTTP: PUT /api/p2p/exchange-offers/{offer_id}/response Path Parameter: offer_id – идентификатор сделки Request Body:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+{
+  "exchanger_id": "exchanger_001",
+  "action": "ACCEPT"  // или "DECLINE"
+}
+Response: {
+  "offer_id": "offer_789",
+  "status": "APPROVED",
+  "message": "Exchange offer accepted"
+}
 
-```bash
-$ npm install -g mau
-$ mau deploy
-```
+Назначение: Позволяет Exchanger'у принять либо отклонить поступившее предложение.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Подтверждение перевода фиата HTTP: POST /api/p2p/exchange-offers/{offer_id}/confirm-payment Path Parameter: offer_id Request Body:
+{
+  "exchanger_id": "exchanger_001",
+  "payment_reference": "tx_abc123"
+}
+Response: {
+  "offer_id": "offer_789",
+  "status": "PAYMENT_CONFIRMED",
+  "message": "Payment confirmed by exchanger"
+}
+Назначение: Фиксирует факт перевода фиата внешней платежной системой, обновляя статус сделки.
 
-## Resources
+Подтверждение получения фиата Customer’ом HTTP: POST /api/p2p/exchange-offers/{offer_id}/confirm-receipt Path Parameter: offer_id Request Body:
+{
+  "customer_id": "customer_123"
+}
+Response: {
+  "offer_id": "offer_789",
+  "status": "FINISHED",
+  "message": "Fiat received, transaction completed"
+}
+Назначение: Завершает сделку, переводя финальный статус после подтверждения получения средств.
 
-Check out a few resources that may come in handy when working with NestJS:
+Открытие спора HTTP: POST /api/p2p/exchange-offers/{offer_id}/dispute Path Parameter: offer_id Request Body:
+{
+  "opened_by": "CUSTOMER",  // или "EXCHANGER"
+  "reason": "Фиат не получен/не отправлен"
+}
+Response: {
+  "dispute_id": "dispute_321",
+  "status": "DISPUTE_OPEN",
+  "message": "Dispute opened successfully"
+}
+Назначение: Любая сторона может инициировать спор в случае возникновения проблем.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Запрос статуса сделки HTTP: GET /api/p2p/exchange-offers/{offer_id}/status Path Parameter: offer_id 
+Response: {
+  "offer_id": "offer_789",
+  "status": "FINISHED",
+  "details": "Transaction completed at 2025-04-18T15:00:00Z"
+}
+Назначение: Возвращает текущее состояние сделки и, при необходимости, дополнительную информацию.
 
-## Support
+Установка онлайн статуса для Exchanger’а HTTP: PATCH /api/p2p/exchanger/{exchanger_id}/status Path Parameter: exchanger_id Request Body: 
+{
+  "online": true
+}
+Response: {
+  "exchanger_id": "exchanger_001",
+  "online": true,
+  "message": "Exchanger status updated"
+}
+Назначение: Позволяет Exchanger'у переключаться между онлайн/офлайн, что влияет на получение заявок. Дополнительно система должна отслеживать неотвеченные заявки и, при превышении лимита (например, 5 подряд), применять автоматическую блокировку.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Отмена сделки HTTP: POST /api/p2p/exchange-offers/{offer_id}/cancel Path Parameter: offer_id Request Body: 
+{
+  "cancelled_by": "CUSTOMER",  // или "EXCHANGER"
+  "reason": "Отсутствие реакции второй стороны"
+}
+Response: {
+  "offer_id": "offer_789",
+  "status": "CANCELLED",
+  "message": "Transaction cancelled"
+}
+Назначение: Позволяет отменить сделку, например, по таймауту или по инициативе одной из сторон.
 
-## Stay in touch
+Разрешение спора администратором HTTP: POST /api/p2p/disputes/{dispute_id}/resolve Path Parameter: dispute_id Request Body: 
+{
+  "admin_id": "admin_999",
+  "resolution": "RESOLVED_FINISHED",  // или другие исходы
+  "comment": "После проверки документы в порядке"
+}
+Response: {
+  "dispute_id": "dispute_321",
+  "status": "DISPUTE_RESOLVED",
+  "message": "Dispute resolved by admin"
+}
+Назначение: Административное действие, позволяющее завершить спор с назначением итогового исхода.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
-## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+
+<!--  -->
+
+
+
+
+
+## Рекомендации при разработке
+Строгость контрактов:
+
+Документируйте каждый gRPC метод и соответствующие сообщения.
+
+Поддерживайте консистентность между gRPC-схемой и REST‑эндпоинтами (используя, например, API‑шлюз).
+
+Управление состоянием:
+
+Реализуйте атомарные транзакции в базе данных для обновления статусов сделок по каждому действию.
+
+Следите за правильными переходами между статусами (используйте паттерн «state machine», если потребуется).
+
+Безопасность и валидация:
+
+Реализуйте JWT‑аутентификацию и RBAC, чтобы обеспечить корректный доступ к методам (особенно для операций, связанных со сторонами сделки и административными действиями).
+
+Фильтруйте входные данные и обрабатывайте исключения централизованно (Exception Filters).
+
+Логирование и мониторинг:
+
+Интегрируйте систему логирования (например, через Winston) для отслеживания действий, ошибок и событий Kafka.
+
+Настройте мониторинг, чтобы вовремя обнаруживать и реагировать на сбои (например, из-за несвоевременного ответа от Exchanger'а).
+
+Асинхронная обработка:
+
+Используйте Kafka для событий, связанных с ключевыми действиями (создание сделки, подтверждение платежа, открытие спора).
+
+Продумайте механизмы повторных попыток и compensating transactions для критичных операций.
+
+Тестирование:
+
+Покройте бизнес‑логику юнит‑ и интеграционными тестами, особенно для потоков с изменением состояний сделки.
+
+Следуя данному плану и используя описанные gRPC‑схему и клиентские пути, вы получите чёткое руководство для реализации микросервиса. Это позволит легко написать надежный и масштабируемый P2P обменник с использованием NestJS, Kafka и gRPC, а также интегрировать его с REST‑шлюзом для удобства клиентов. Если возникнут дополнительные вопросы или потребуется уточнение отдельных моментов, смело обращайтесь!
+
+
+
+
+
+<!--  -->
+
+
+
+
+
+Ниже привожу подробный структурированный план разработки микросервиса на NestJS с использованием Kafka и gRPC, который полностью соответствует заявленному ТЗ для P2P Market (без фронтенд-части). Этот план рассчитан как руководство для опытного backend‑разработчика, позволяющее после его изучения с легкостью приступить к реализации.
+
+1. Анализ и Обзор Требований
+Функционал:
+
+Две роли:
+
+Customer: может откликаться на уже созданное Exchanger‑ом объявление (Exchange Listing) и предлагать сделку (Exchange Offer).
+
+Exchanger: создает Exchange Listing и принимает (или отклоняет) Exchange Offer.
+
+Типы сделок:
+
+Crypto2Fiat: Customer передаёт крипту (из личного баланса) и получает фиат вне платформы.
+
+Fiat2Crypto: Customer передаёт фиат вне системы и получает крипту на свой счет.
+
+Ключевые моменты:
+
+Сделка может начинаться только по инициативе Customer, откликающегося на объявление.
+
+Заморозка средств: в момент создания Exchange Offer у Customer блокируется нужное количество средств (например, крипта для Crypto2Fiat).
+
+Споры: обе стороны (Customer и Exchanger) могут открывать спор на любом этапе, если находятся в уязвимом положении. Споры будут обрабатываться вручную (админ/модератор вводит решение через чат, фактически отображает комментарии).
+
+Активные сделки: отображаются сделки, которые не имеют статуса CANCELLED, DECLINED, FINISHED (и у них время завершения не более 24 часов назад).
+
+Зеркальность действий: логика Customer и Exchanger во многом зеркальна – разница заключается лишь в том, кто переводит фиат.
+
+Статус Exchanger’а: у каждого Exchanger’а есть переключатель «Online = YES/NO». Если Exchanger при статусе YES более 5 раз подряд не отвечает на получаемые Exchange Offer’ы, его аккаунт замораживается – активные объявления удаляются, и он не может создавать новые до ручной разморозки модератором.
+
+2. Проектная Архитектура и Стек
+NestJS: основа для создания микросервиса (структура модулей, DI, middleware).
+
+Kafka: событийная шина для обмена сообщениями между компонентами микросервиса (и для взаимодействия с другими сервисами, если потребуется).
+
+gRPC: для синхронного обмена между микросервисами с описанием контрактов через proto‑файлы.
+
+База данных (PostgreSQL): хранение информации о пользователях, объявлениях, сделках, спорных ситуациях.
+
+TypeORM/Prisma: ORM‑инструмент для работы с базой.
+
+Redis (опционально): для кеширования и отслеживания временных счетчиков (например, счетчик неотвеченных Exchange Offer’ов).
+
+3. Модульная Структура Проекта
+3.1. Основные Модули
+Auth & Users Module
+
+Работа с пользователями (Customer/Exchanger).
+
+Аутентификация (JWT) и определение ролей.
+
+Методы для переключения статуса, проверки активности и управления заморозкой аккаунта.
+
+Exchange Module
+
+Exchange Listing: CRUD‑операции для объявлений от Exchanger’ов.
+
+Exchange Offer: Создание сделки – только Customer может создать отклик на объявление.
+
+При создании Exchange Offer должна запускаться логика блокировки (freeze) средств.
+
+Transaction Module
+
+Управление состоянием сделки: от создания до подтверждения перевода фиата, завершения сделки и отмены.
+
+Обновление статуса сделки в зависимости от действий сторон.
+
+Dispute Module
+
+Открытие споров (по инициативе Customer или Exchanger).
+
+Логика, позволяющая обеим сторонам одновременно или независимо открыть спор.
+
+Обработка споров – данные вводятся через модераторский интерфейс (не реализовано в бизнес‑логике, только фиксация комментариев и конечное решение).
+
+Notification / Event Module
+
+Интеграция с Kafka:
+
+Производитель (Producer): отправка событий, таких как ExchangeOfferCreated, PaymentConfirmed, DisputeOpened.
+
+Потребитель (Consumer): обработка входящих событий (например, изменения статуса сделки, уведомление модераторов об открытии спора).
+
+4. Взаимодействие через gRPC
+4.1. Определение Контракта (Proto‑файл)
+Создайте proto‑файл (например, p2p_exchange.proto):
+PROTO файл написан
+
+
+4.2. Реализация gRPC сервиса в NestJS
+Настройте gRPC Transport в основном приложении NestJS.
+
+Имплементируйте методы сервиса в соответствующем контроллере/сервисе P2PExchangeService.
+
+5. Детальная Бизнес‑Логика и Потоки Сделки
+5.1. Создание Exchange Offer (инициируется Customer’ом)
+Проверка:
+
+Сверить, что объявление (Exchange Listing) существует и активно.
+
+Убедиться, что у Customer’а достаточно средств для заморозки (если Crypto2Fiat) или что другая логика применима для Fiat2Crypto.
+
+Действия:
+
+Блокировать (freeze) указанное количество средств на балансе Customer’а.
+
+Создать запись Exchange Offer с первоначальным статусом PENDING.
+
+Отправить событие Kafka ExchangeOfferCreated для последующей обработки (например, для уведомления Exchanger’а).
+
+5.2. Принятие Exchange Offer (Exchanger)
+При получении уведомления:
+
+Exchanger получает заявку (через gRPC или через уведомления).
+
+Exchanger принимает (или отклоняет) сделку:
+
+Если принимает, фиксируется состояние сделки (например, IN_PROGRESS), и статус обновляется.
+
+Если отклоняет, транзакция отменяется и разблокируются средства.
+
+Замечание:
+
+Время реакции: если Exchanger не отреагирует в течение заданного таймаута (например, 30 минут), сделка автоматически отменяется, средства разблокируются, и клиенту отправляется уведомление.
+
+5.3. Подтверждение платежа
+Exchanger, переведя фиат (вне платформы), вызывает метод ConfirmPayment.
+
+Логика:
+
+Проверка корректности перевода (внешнюю проверку можно реализовать через callback от платежных систем или модератора).
+
+После подтверждения статус сделки обновляется на PAYMENT_CONFIRMED.
+
+Отправляется Kafka-событие PaymentConfirmed.
+
+5.4. Завершение сделки
+После подтверждения оплаты Customer подтверждает получение фиата (если требуется явное подтверждение).
+
+Система переводит заблокированную крипту Exchanger’у (если сделка Crypto2Fiat) или фиксирует результаты для сделок Fiat2Crypto.
+
+Сделка ставится в статус FINISHED и окончательно фиксируется.
+
+5.5. Обработка споров
+Открытие спора:
+
+Любая сторона (Customer или Exchanger) может открыть спор, если считает себя в уязвимом положении.
+
+Метод OpenDispute проверяет, действительно ли сторона имеет право инициировать спор (например, текущий статус сделки, время последнего действия и т.п.).
+
+После открытия спора статус сделки обновляется на DISPUTE_OPEN.
+
+Отправляется событие Kafka DisputeOpened.
+
+Разрешение спора:
+
+Решение принимается вручную через модераторский (админский) инструмент – данные (комментарии, решения) сохраняются в Dispute записи.
+
+После принятия решения статус сделки финализируется (либо завершение, либо отмена сделки, либо перераспределение средств).
+
+5.6. Фильтрация активных сделок
+Active Exchanges:
+
+Отображаются заявки, у которых статус не равен CANCELLED, DECLINED или FINISHED (если статус FINISHED установлен более чем 24 часа назад, сделка исключается из активных).
+
+Реализация:
+
+На уровне репозитория (или через query‑builder) добавить фильтр по статусам и временным меткам.
+
+5.7. Управление статусом Exchanger’а
+Переключение статуса Online:
+
+Exchanger может переключаться между ONLINE (YES) и OFFLINE (NO) через личное меню (Dashboard P2P).
+
+Мониторинг активности:
+
+При получении Exchange Offer, если Exchanger не реагирует (например, не принимает/не отклоняет) более 5 раз подряд, автоматически:
+
+Снимаются все активные Exchange Listing’и (удаление или перевод в неактивное состояние).
+
+Запрещается создание новых объявлений до вмешательства модератора.
+
+Реализовать можно с помощью инкрементного счетчика, который хранится либо в БД, либо во временном кеше (Redis).
+
+6. Интеграция с Kafka
+6.1. Kafka Producer
+В каждом ключевом методе (создание offer, подтверждение платежа, открытие спора) отправлять событие:
+
+Пример события:
+
+json
+{
+  "event": "ExchangeOfferCreated",
+  "data": {
+    "offerId": "UUID",
+    "customerId": "customer-id",
+    "listingId": "listing-id",
+    "amount": 100.0,
+    "timestamp": "2025-04-18T12:00:00Z"
+  }
+}
+Настройка producer’а с использованием библиотеки kafkajs.
+
+6.2. Kafka Consumer
+Создать слушателя (consumer), который будет:
+
+Обрабатывать события подтверждения платежа.
+
+Логировать открытие споров.
+
+Обновлять состояние сделки на основе внешних факторов.
+
+Убедитесь, что у каждого события предусмотрена обработка ошибок и повторное подключение.
+
+7. Интеграция c gRPC
+7.1. Настройка gRPC транспорта
+В main.ts сконфигурировать gRPC‑транспорт:
+
+typescript
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import * as path from 'path';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'p2p',
+      protoPath: path.join(__dirname, './p2p_exchange.proto'),
+      url: '0.0.0.0:50051',
+    },
+  });
+  await app.startAllMicroservices();
+  await app.listen(3000);
+}
+bootstrap();
+Создайте контроллеры/сервисы, реализующие методы из proto‑файла.
+
+8. Тестирование и Валидация
+Unit‑тесты: для всех бизнес‑методов, проверки корректности перевода состояний, правильной блокировки средств и логики автоматического замораживания Exchanger’а.
+
+Интеграционные тесты: симулировать полный поток от создания deal до завершения (с использованием Kafka и gRPC моков).
+
+Обработка ошибок: глобальные фильтры (Exception Filters) в NestJS для централизованного логирования ошибок.
+
+9. Рекомендации и Советы
+Модульность и SOLID‑принципы: разделяйте логические блоки (например, отдельный сервис для работы со сделками, отдельный для споров и т.д.). Это облегчит тестирование и сопровождение.
+
+Контракты: строго придерживайтесь gRPC‑контрактов и схемы Kafka-сообщений – они являются связующим звеном между микросервисами.
+
+Логирование и мониторинг: интегрируйте механизмы логирования (например, Winston) и мониторинга исполнения операций. Это поможет отлавливать проблемы на ранней стадии.
+
+Документация: документируйте все эндпоинты, Kafka‑события и gRPC‑методы. Рекомендуется добавить Swagger для HTTP‑контроллеров, если они используются для администрирования или отладки.
+
+Безопасность: уделите внимание аутентификации и авторизации. Даже если микросервис работает в рамках микросервисной архитектуры, каждая операция должна быть защищена с использованием JWT, RBAC и (при необходимости) 2FA для админских операций.
+
+Управление состоянием: проектируйте модели так, чтобы переходы между статусами сделки были атомарными и согласованными. Используйте транзакции в PostgreSQL.
+
+Асинхронность: учитывайте, что Kafka и gRPC предполагают асинхронную обработку. При проектировании бизнес‑логики учитывайте возможности повторной попытки и компенсационных механизмов.
+
+Мониторинг активности Exchanger’а: используйте Redis или другой in‑memory datastore для быстрого доступа к счетчикам неотвеченных заявок, что поможет оперативно замораживать аккаунты.
+
+Тайминги: чётко определите таймауты (например, 30 минут на ответ от Exchanger, 24 часа для сокрытия FINISHED‑сделок) – это необходимо для корректной фильтрации и автоматического обновления состояния.
+
+Следуя данному плану, вы получите чёткое представление о структуре и функциональных блоках микросервиса. Он обеспечивает надежный обмен сообщениями между компонентами (через Kafka и gRPC) и позволяет реализовать все нюансы логики P2P обмена, включая блокировку средств, споры и автоматическое управление активностью Exchanger’а.
+
+Если возникнут вопросы по реализации конкретных частей (например, настройка Kafka‑коннекта или деталей работы gRPC‑сервиса), не стесняйтесь спрашивать! Удачи в разработке!
+
+
+
+
+
+
+
+
+
+
+
+<!--  -->
+
+
+
+Ниже представлен подробный пошаговый план «от начала до конца» для разработки микросервиса P2P Market с использованием NestJS, Kafka и gRPC. Этот план охватывает анализ требований, подготовку окружения, проектирование архитектуры, реализацию функционала, тестирование и деплой, а также содержит рекомендации и практические советы на каждом этапе.
+
+1. Анализ и Подготовка
+1.1. Анализ технического задания
+Изучить функционал:
+
+Роли: Customer (откликается на Exchange Listing, создаёт Exchange Offer) и Exchanger (создаёт объявления, принимает/отклоняет сделки).
+
+Типы сделок: Crypto2Fiat и Fiat2Crypto.
+
+Особенности:
+
+При создании сделки средства (например, крипта) замораживаются у Customer.
+
+Возможность открытия спора обеими сторонами в случае возникновения проблем.
+
+Отображение «активных сделок»: исключить сделки со статусами CANCELLED, DECLINED, FINISHED (если более 24 часов назад).
+
+Логика автоматического контроля активности Exchanger’а: если Exchanger, находясь ONLINE, не отвечает более пяти раз подряд, его кабинет замораживается (удаляются активные объявления и блокируется создание новых).
+
+Определить нефункциональные требования:
+
+Безопасность (JWT, RBAC, защита от брутфорса).
+
+Надёжность и масштабируемость (использование Kafka для событий и gRPC для быстрого вызова методов).
+
+Обработка ошибок, логирование и мониторинг.
+
+1.2. Подготовка окружения разработки
+Установить Node.js (рекомендуемая LTS-версия).
+
+Установить NestJS CLI (npm i -g @nestjs/cli) и создать базовый проект:
+
+bash
+nest new p2p-market
+Настроить локальную инсталляцию PostgreSQL (или использовать Docker-образ) для хранения данных.
+
+При необходимости, установить локальный кластер Kafka (например, с помощью Docker‑compose) и Redis для кеширования и быстрых счётчиков.
+
+Настроить редактор/IDE (VS Code, WebStorm) с поддержкой TypeScript и NestJS.
+
+2. Проектирование Архитектуры
+2.1. Определение модулей (Domain-Driven Design)
+Разбейте проект на логические модули:
+
+Auth & Users Module:
+
+Аутентификация (JWT), авторизация, определение ролей (CUSTOMER, EXCHANGER, ADMIN, MODERATOR).
+
+Методы для переключения статуса Exchanger (ONLINE/OFFLINE) и ведения счетчиков неотвеченных сделок.
+
+Exchange Module:
+
+CRUD‑операции для Exchange Listing.
+
+Логика создания Exchange Offer:
+
+Валидация: проверка существования объявления, доступности средств Customer.
+
+Блокировка средств (например, перевод крипты в статус “заморожено”).
+
+Отправка события в Kafka (например, ExchangeOfferCreated).
+
+Transaction Module:
+
+Обработка жизненного цикла сделки: от создания до подтверждения и завершения.
+
+Унифицированная модель Transaction с использованием статусов (PENDING, APPROVED, PAYMENT_CONFIRMED, RECEIPT_CONFIRMED, FINISHED, CANCELLED, DISPUTE_OPEN, DISPUTE_RESOLVED).
+
+Dispute Module:
+
+Создание и обработка споров с возможностью ввода комментариев администратором.
+
+Сохранение данных спора, связывание со сделкой.
+
+Notification Module:
+
+Отправка оповещений через Kafka.
+
+Реализация consumer’а для обработки внешних обратных вызовов (например, по оплате, открытию спора).
+
+Common Module:
+
+Общее логирование, обработка ошибок, константы, утилиты валидации.
+
+2.2. Интеграция gRPC и Kafka
+gRPC:
+
+Создать proto‑файл (см. предыдущий полный пример) для определения методов и сообщений.
+
+Настроить NestJS для работы через gRPC‑транспорт (конфигурация в main.ts).
+
+Kafka:
+
+Использовать библиотеку kafkajs или соответствующий модуль для NestJS.
+
+Дефинировать шаблоны событий и настраивать producer/consumer.
+
+Обеспечить обработку повторных попыток при сетевых сбоях.
+
+2.3. Проектирование базы данных
+Определить сущности:
+
+User — с полями id, role, баланс, online-статус, счётчик неотвеченных сделок.
+
+ExchangeListing — с данными объявления, статусом, лимитами и курсами.
+
+ExchangeOffer / Transaction — с идентификатором, суммой, статусом, датами и ссылками на пользователей.
+
+Dispute — с текстом причины, ID сделанной транзакции, статусом спора и комментариями.
+
+Создать миграции и использовать ORM (TypeORM или Prisma).
+
+3. Реализация
+3.1. Инициализация проекта
+Создать модули по архитектуре (например, с помощью команды nest generate module auth, nest generate module exchange и т.д.).
+
+Настроить глобальные middleware для логирования и обработки ошибок.
+
+3.2. Реализация Auth & Users Module
+JWT и Guards:
+
+Реализовать AuthService для генерации и проверки токенов.
+
+Создать Guards для проверки ролей (например, RolesGuard, JwtAuthGuard).
+
+Профиль пользователя:
+
+Методы для получения данных, переключения статуса Exchanger.
+
+Реализовать endpoint типа: PATCH /api/v1/users/:id/status для переключения online статуса.
+
+Логика автоматического замораживания: при превышении лимита неотвеченных Exchange Offer, обновлять состояние пользователя в БД и инициировать Kafka-событие о заморозке.
+
+3.3. Реализация Exchange Module
+Exchange Listing:
+
+CRUD‑операции для создания и удаления объявлений от Exchanger’а.
+
+REST‑эндпоинты и их вызовы через gRPC, если требуется.
+
+Exchange Offer:
+
+Создать метод (gRPC и REST) для создания предложения:
+
+Проверка баланса и заморозка средств.
+
+Сохранить запись сделки со статусом PENDING.
+
+Отправить событие Kafka ExchangeOfferCreated.
+
+Реализовать метод для ответа Exchanger’а:
+
+Изменение статуса на APPROVED или DECLINED.
+
+Обновление записи сделки, информирование через Kafka.
+
+3.4. Реализация Transaction Module
+Подтверждение платежа и завершение сделки:
+
+Exchanger вызывает ConfirmPayment — валидируются данные, обновляется статус сделки на PAYMENT_CONFIRMED.
+
+Customer подтверждает получение — статус меняется на RECEIPT_CONFIRMED/FINISHED.
+
+При каждом изменении статуса отправляются Kafka-события.
+
+Отмена сделки:
+
+Вызов метода CancelTransaction (REST/gRPC), при котором транзакция переводится в статус CANCELLED и размыкаются замороженные средства.
+
+3.5. Реализация Dispute Module
+Открытие спора:
+
+Endpoint OpenDispute, проверка прав (например, что сделка находится в допустимом состоянии для спора).
+
+Изменение статуса сделки на DISPUTE_OPEN.
+
+Создание записи Dispute с сохранением причины и ссылки на сделку.
+
+Kafka‑событие DisputeOpened для уведомления модераторов.
+
+Разрешение спора:
+
+Администратор через специальный endpoint (gRPC/REST) вызывает ResolveDispute.
+
+Записывается решение, обновляется статус сделки и спор переводится в DISPUTE_RESOLVED.
+
+Логируются комментарии и итоговая сумма (если применимо).
+
+3.6. Реализация Kafka
+Настройка Kafka Producer:
+
+Создать сервис, который инкапсулирует отправку сообщений для каждого ключевого действия.
+
+Настройка Kafka Consumer:
+
+Создать обработчики событий (например, для автоматической отмены сделки по таймауту).
+
+Обеспечить механизм повторных попыток и логирование ошибок.
+
+3.7. Интеграция gRPC
+Конфигурация в main.ts:
+
+typescript
+// main.ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import * as path from 'path';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'p2p',
+      protoPath: path.join(__dirname, './p2p_exchange.proto'),
+      url: '0.0.0.0:50051',
+    },
+  });
+  await app.startAllMicroservices();
+  await app.listen(3000);
+}
+bootstrap();
+Имплементация контроллеров и сервисов, реализующих методы из proto‑файла:
+
+Каждый метод (CreateExchangeOffer, RespondExchangeOffer, ConfirmPayment, ConfirmReceipt, OpenDispute, GetTransactionStatus, SetExchangerStatus, CancelTransaction, ResolveDispute) должен иметь соответствующую бизнес‑логику, включая валидацию, обработку ошибок и логирование.
+
+4. Тестирование
+4.1. Unit-тестирование
+Написать покрытия для каждого сервиса (AuthService, ExchangeService, TransactionService, DisputeService) с использованием Jest.
+
+Мокировать зависимости (репозитории, Kafka-сервис, gRPC вызовы).
+
+4.2. Интеграционные тесты
+Смоделировать полный цикл сделки (от создания Exchange Offer до подтверждения платежа и завершения сделки).
+
+Тестировать последовательность работы Kafka (отправка/приём событий).
+
+Протестировать gRPC вызовы с использованием встроенных gRPC-клиентов (например, @grpc/grpc-js).
+
+4.3. End-to-End (E2E) тестирование
+Создать тестовые сценарии, используя Supertest для REST‑эндпоинтов (если реализован REST‑шлюз).
+
+Протестировать авторизацию, роль-based доступ и корректное переключение состояний сделки.
+
+5. Документация и Логирование
+5.1. Документация
+Документировать каждый gRPC‑метод и REST‑эндпоинт (можно сгенерировать Swagger для REST‑API).
+
+Составить README с описанием архитектуры, зависимостей, инструкций по запуску и конфигурации Kafka/gRPC.
+
+5.2. Логирование и мониторинг
+Интегрировать Winston или другой логгер для структурированного логирования.
+
+Настроить глобальные Exception Filters для централизованной обработки ошибок.
+
+Настроить мониторинг (например, Prometheus + Grafana) для отслеживания состояния микросервиса, задержек gRPC, ошибок Kafka и метрик БД.
+
+6. Деплой и CI/CD
+6.1. Docker
+Создать Dockerfile для контейнеризации микросервиса.
+
+Настроить docker-compose (или Kubernetes манифесты) для запуска микросервиса, Kafka, PostgreSQL и Redis совместно.
+
+6.2. CI/CD-пайплайн
+Настроить систему непрерывной интеграции (например, GitHub Actions, GitLab CI) для запуска тестов и сборки проекта.
+
+Автоматизировать деплой в staging/production окружения.
+
+7. Рекомендации и Советы
+Модульность и SOLID: Разделяйте логику по модулям, избегайте тесной связи между ними. Используйте Dependency Injection для легкого тестирования и масштабирования.
+
+Контракты: Следите за строгим соблюдением gRPC‑контрактов. Любая модификация proto‑файлов должна быть документирована и синхронизирована с командой.
+
+Безопасность: Реализуйте JWT‑аутентификацию и RBAC для всех эндпоинтов. Особое внимание уделите обработке ошибок и защите от атак (rate limiting, валидация данных).
+
+Согласованность состояний: Постройте модель переходов состояний сделки (например, с использованием паттерна state machine), чтобы гарантировать атомарность операций. Используйте транзакции в БД для критичных обновлений.
+
+Тестирование: Покрывайте основные пути (happy path и негативные сценарии) юнит‑и интеграционными тестами. Рекомендуется писать E2E‑тесты для проверки полной цепочки действий.
+
+Логирование и мониторинг: Обязательно настройте расширенное логирование и мониторинг, чтобы в продакшене оперативно отслеживать узкие места и сбои.
+
+Kafka и gRPC: При использовании асинхронной коммуникации протестируйте обработку повторных сообщений. Обратите внимание на обработку ошибок и возможность компенсационных транзакций при неудачных операциях.
+
+Документация и Code Reviews: Документируйте бизнес-логику, архитектурные решения и нейминги. Проводите регулярные code reviews для поддержания качества кода.
+
+Итоговый пошаговый план
+Анализ требований:
+
+Подробно изучить ТЗ и определить все бизнес‑требования, роли и сценарии.
+
+Подготовка разработки:
+
+Настроить рабочее окружение, установить необходимые инструменты и зависимости.
+
+Архитектурное проектирование:
+
+Определить модули, спроектировать базу данных, написать proto‑файл.
+
+Реализация микросервиса (по модулям):
+
+Реализовать Auth, Exchange, Transaction, Dispute, Notification модули.
+
+Интегрировать gRPC‑службы с помощью proto-файла и настроить Kafka producer/consumer.
+
+Тестирование:
+
+Написание unit‑, интеграционных и E2E‑тестов, обеспечение корректного перехода статусов сделки.
+
+Документация и логирование:
+
+Создать Swagger, README, документировать proto‑файл, настроить логирование и Exception Filters.
+
+Деплой и CI/CD:
+
+Контейнеризация через Docker, настройка CI/CD, деплой на staging/production.
+
+Мониторинг и исправление:
+
+Настроить систему мониторинга, регулярно проводить анализ логов, оптимизировать производительность.
+
+Следуя этому полному плану, вы получите четкое руководство для разработки масштабируемого и надежного микросервиса P2P Market с использованием NestJS, Kafka и gRPC. Такой план позволит легко организовать работу от начального проектирования до финального деплоя, обеспечивая соблюдение всех нюансов бизнес‑логики и безопасности.
+
+Если возникнут вопросы на любом этапе, можно углубиться в конкретное решение или доработать отдельные модули. Удачи в разработке!
