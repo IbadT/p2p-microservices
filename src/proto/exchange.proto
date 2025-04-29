@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package exchange;
+
+service ExchangeService {
+  rpc CreateListing (CreateListingRequest) returns (ExchangeListing);
+  rpc GetListings (GetListingsRequest) returns (GetListingsResponse);
+  rpc CreateOffer (CreateOfferRequest) returns (ExchangeOffer);
+  rpc UpdateTransactionStatus (UpdateTransactionStatusRequest) returns (ExchangeTransaction);
+  rpc GetActiveExchanges (GetActiveExchangesRequest) returns (GetActiveExchangesResponse);
+}
+
+message CreateListingRequest {
+  string userId = 1;
+  string type = 2;
+  string cryptocurrency = 3;
+  string fiatCurrency = 4;
+  double rate = 5;
+  double minAmount = 6;
+  double maxAmount = 7;
+  double availableAmount = 8;
+  repeated string paymentMethods = 9;
+  optional string terms = 10;
+}
+
+message ExchangeListing {
+  string id = 1;
+  string type = 2;
+  string cryptocurrency = 3;
+  string fiatCurrency = 4;
+  double rate = 5;
+  double minAmount = 6;
+  double maxAmount = 7;
+  double availableAmount = 8;
+  repeated string paymentMethods = 9;
+  optional string terms = 10;
+  string userId = 11;
+  bool isActive = 12;
+  string createdAt = 13;
+  string updatedAt = 14;
+}
+
+message GetListingsRequest {
+  optional string type = 1;
+  optional string cryptocurrency = 2;
+  optional string fiatCurrency = 3;
+  optional double minRate = 4;
+  optional double maxRate = 5;
+  repeated string paymentMethods = 6;
+  optional bool isActive = 7;
+}
+
+message GetListingsResponse {
+  repeated ExchangeListing listings = 1;
+}
+
+message CreateOfferRequest {
+  string userId = 1;
+  string listingId = 2;
+  double amount = 3;
+}
+
+message ExchangeOffer {
+  string id = 1;
+  double amount = 2;
+  string status = 3;
+  string userId = 4;
+  string listingId = 5;
+  string createdAt = 6;
+  string updatedAt = 7;
+}
+
+message UpdateTransactionStatusRequest {
+  string transactionId = 1;
+  string userId = 2;
+  string status = 3;
+  optional string paymentProof = 4;
+}
+
+message ExchangeTransaction {
+  string id = 1;
+  string type = 2;
+  string status = 3;
+  string cryptocurrency = 4;
+  string fiatCurrency = 5;
+  double cryptoAmount = 6;
+  double fiatAmount = 7;
+  optional string paymentProof = 8;
+  optional string disputeId = 9;
+  string confirmationDeadline = 10;
+  bool canCustomerDispute = 11;
+  bool canExchangerDispute = 12;
+  bool isActive = 13;
+  string customerId = 14;
+  string exchangerId = 15;
+  string listingId = 16;
+  optional string offerId = 17;
+  string createdAt = 18;
+  string updatedAt = 19;
+  optional string finishedAt = 20;
+}
+
+message GetActiveExchangesRequest {
+  string userId = 1;
+}
+
+message GetActiveExchangesResponse {
+  repeated ExchangeTransaction transactions = 1;
+} 

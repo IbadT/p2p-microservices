@@ -1,0 +1,262 @@
+// User: Содержит статусы активности обменника и систему заморозки
+
+// Balance System: Отдельные модели для баланса и холдов
+
+// Transaction Lifecycle: Детальное отслеживание статусов сделки
+
+// Dispute System: Полная цепочка работы со спорами
+
+// Review System: Система отзывов с привязкой к завершенным сделкам
+
+// Time-based Logic: Поля для контроля временных ограничений (30-минутные таймеры)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  role              UserRole  @default(CUSTOMER)
+  isExchangerActive Boolean   @default(false)
+  isFrozen          Boolean   @default(false)
+  frozenUntil       DateTime?
+  missedOffersCount Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relationships
+  listings              ExchangeListing[]
+  offers                ExchangeOffer[]
+  exchangerTransactions ExchangeTransaction[] @relation("ExchangerTransactions")
+  customerTransactions  ExchangeTransaction[] @relation("CustomerTransactions")
+  disputesInitiated     Dispute[]             @relation("DisputeInitiator")
+  disputesModerated     Dispute[]             @relation("DisputeModerator")
+  reviewsWritten        Review[]              @relation("ReviewAuthor")
+  reviewsReceived       Review[]              @relation("ReviewTarget")
+  balance               UserBalance?
+  exchangerSettings     ExchangerSettings?
+  holds                 BalanceHold[]
+
+  @@index([isExchangerActive])
+  @@index([isFrozen])
+}
+
+enum UserRole {
+  CUSTOMER
+  EXCHANGER
+  ADMIN
+  MODERATOR
+}
+
+model ExchangeListing {
+  id              String          @id @default(uuid())
+  type            ExchangeType
+  cryptocurrency  String
+  fiatCurrency    String
+  rate            Float
+  minAmount       Float
+  maxAmount       Float
+  availableAmount Float
+  paymentMethods  PaymentMethod[]
+  terms           String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id])
+  offers       ExchangeOffer[]
+  transactions ExchangeTransaction[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([userId])
+}
+
+enum ExchangeType {
+  CRYPTO_TO_FIAT
+  FIAT_TO_CRYPTO
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  PAYPAL
+  WISE
+  CASH
+  // Добавьте другие методы по необходимости
+}
+
+model ExchangeOffer {
+  id        String      @id @default(uuid())
+  amount    Float
+  status    OfferStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relationships
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id])
+  listingId   String
+  listing     ExchangeListing      @relation(fields: [listingId], references: [id])
+  transaction ExchangeTransaction?
+
+  @@index([status])
+  @@index([userId])
+  @@index([listingId])
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model ExchangeTransaction {
+  id                   String            @id @default(uuid())
+  type                 ExchangeType
+  status               TransactionStatus @default(PENDING_OFFER)
+  cryptocurrency       String
+  fiatCurrency         String
+  cryptoAmount         Float
+  fiatAmount           Float
+  paymentProof         String? // URL к доказательству оплаты
+  disputeId            String?
+  confirmationDeadline DateTime // Таймер 30 минут
+  canCustomerDispute   Boolean           @default(false)
+  canExchangerDispute  Boolean           @default(false)
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  finishedAt           DateTime? // When transaction reached FINISHED state
+
+  // Relationships
+  offerId     String?         @unique
+  offer       ExchangeOffer?  @relation(fields: [offerId], references: [id])
+  customerId  String
+  customer    User            @relation(fields: [customerId], references: [id], name: "CustomerTransactions")
+  exchangerId String
+  exchanger   User            @relation(fields: [exchangerId], references: [id], name: "ExchangerTransactions")
+  listingId   String
+  listing     ExchangeListing @relation(fields: [listingId], references: [id])
+  dispute     Dispute?
+  review      Review?
+
+  @@index([status])
+  @@index([customerId])
+  @@index([exchangerId])
+  @@index([confirmationDeadline])
+  @@index([isActive])
+  @@index([finishedAt])
+}
+
+enum TransactionStatus {
+  PENDING_OFFER // Initial state when offer is created
+  PENDING_PAYMENT // After offer is accepted, waiting for payment
+  PAYMENT_SENT // Customer marked payment as sent
+  PAYMENT_CONFIRMED // Exchanger confirmed payment receipt
+  COMPLETED // Transaction fully completed
+  CANCELLED // Transaction cancelled
+  DECLINED // Offer declined by exchanger
+  DISPUTED // Under dispute
+  FINISHED // Final state after 24 hours of completion
+}
+
+model Dispute {
+  id         String        @id @default(uuid())
+  reason     String
+  status     DisputeStatus @default(OPEN)
+  resolution String?
+  resolvedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  // Relationships
+  transactionId String              @unique
+  transaction   ExchangeTransaction @relation(fields: [transactionId], references: [id])
+  initiatorId   String
+  initiator     User                @relation("DisputeInitiator", fields: [initiatorId], references: [id])
+  moderatorId   String?
+  moderator     User?               @relation("DisputeModerator", fields: [moderatorId], references: [id])
+
+  @@index([status])
+  @@index([initiatorId])
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  transactionId String              @unique
+  transaction   ExchangeTransaction @relation(fields: [transactionId], references: [id])
+  authorId      String
+  author        User                @relation("ReviewAuthor", fields: [authorId], references: [id])
+  targetId      String
+  target        User                @relation("ReviewTarget", fields: [targetId], references: [id])
+
+  @@index([authorId])
+  @@index([targetId])
+}
+
+model UserBalance {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  cryptoBalance   Json // Store balances for different cryptocurrencies
+  totalHoldAmount Json // Store total held amounts per cryptocurrency
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BalanceHold {
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id])
+  cryptocurrency       String
+  amount               Float
+  type                 HoldType
+  relatedTransactionId String?
+  expiresAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum HoldType {
+  EXCHANGE_OFFER // Hold for pending exchange offer
+  DISPUTE // Hold during dispute
+  SYSTEM // System-level hold
+}
+
+model ExchangerSettings {
+  id                      String          @id @default(uuid())
+  userId                  String          @unique
+  user                    User            @relation(fields: [userId], references: [id])
+  autoAcceptOffers        Boolean         @default(false)
+  preferredPaymentMethods PaymentMethod[]
+  workingHours            Json? // Store working hours for each day
+  minimumRating           Float? // Minimum customer rating to accept
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+}

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package audit;
+
+service AuditService {
+  rpc CreateAuditLog (CreateAuditLogRequest) returns (AuditLog) {}
+  rpc GetAuditLogs (GetAuditLogsRequest) returns (AuditLogsResponse) {}
+}
+
+message CreateAuditLogRequest {
+  string userId = 1;
+  string action = 2;
+  string entityType = 3;
+  string entityId = 4;
+  string details = 5;
+  string ipAddress = 6;
+}
+
+message GetAuditLogsRequest {
+  optional string userId = 1;
+  optional string entityType = 2;
+  optional string entityId = 3;
+  optional string startDate = 4;
+  optional string endDate = 5;
+  int32 page = 6;
+  int32 limit = 7;
+}
+
+message AuditLogsResponse {
+  repeated AuditLog logs = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message AuditLog {
+  string id = 1;
+  string userId = 2;
+  string action = 3;
+  string entityType = 4;
+  string entityId = 5;
+  string details = 6;
+  string ipAddress = 7;
+  string createdAt = 8;
+} 

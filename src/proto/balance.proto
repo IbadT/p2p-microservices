@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package balance;
+
+service BalanceService {
+  rpc GetBalance (GetBalanceRequest) returns (Balance);
+  rpc CreateHold (CreateHoldRequest) returns (BalanceHold);
+  rpc ReleaseHold (ReleaseHoldRequest) returns (Empty);
+  rpc Transfer (TransferRequest) returns (Empty);
+  rpc Deposit (DepositRequest) returns (Balance);
+  rpc Withdraw (WithdrawRequest) returns (Balance);
+}
+
+message Empty {}
+
+message GetBalanceRequest {
+  string userId = 1;
+}
+
+message Balance {
+  string id = 1;
+  string userId = 2;
+  map<string, double> cryptoBalance = 3;
+  map<string, double> totalHoldAmount = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message CreateHoldRequest {
+  string userId = 1;
+  string cryptocurrency = 2;
+  double amount = 3;
+  string type = 4;
+  optional string relatedTransactionId = 5;
+}
+
+message BalanceHold {
+  string id = 1;
+  string userId = 2;
+  string cryptocurrency = 3;
+  double amount = 4;
+  string type = 5;
+  optional string relatedTransactionId = 6;
+  optional string expiresAt = 7;
+  string createdAt = 8;
+  string updatedAt = 9;
+}
+
+message ReleaseHoldRequest {
+  string holdId = 1;
+}
+
+message TransferRequest {
+  string fromUserId = 1;
+  string toUserId = 2;
+  string cryptocurrency = 3;
+  double amount = 4;
+}
+
+message DepositRequest {
+  string userId = 1;
+  string cryptocurrency = 2;
+  double amount = 3;
+}
+
+message WithdrawRequest {
+  string userId = 1;
+  string cryptocurrency = 2;
+  double amount = 3;
+} 

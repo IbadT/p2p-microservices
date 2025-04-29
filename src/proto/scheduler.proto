@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package scheduler;
+
+service SchedulerService {
+  rpc CreateScheduledTask (CreateScheduledTaskRequest) returns (ScheduledTask) {}
+  rpc UpdateScheduledTask (UpdateScheduledTaskRequest) returns (ScheduledTask) {}
+  rpc GetScheduledTask (GetScheduledTaskRequest) returns (ScheduledTask) {}
+  rpc ListScheduledTasks (ListScheduledTasksRequest) returns (ScheduledTasksResponse) {}
+}
+
+message CreateScheduledTaskRequest {
+  string name = 1;
+  string type = 2;
+  string schedule = 3;
+  string data = 4;
+  bool enabled = 5;
+}
+
+message UpdateScheduledTaskRequest {
+  string taskId = 1;
+  optional string name = 2;
+  optional string schedule = 3;
+  optional string data = 4;
+  optional bool enabled = 5;
+}
+
+message GetScheduledTaskRequest {
+  string taskId = 1;
+}
+
+message ListScheduledTasksRequest {
+  optional string type = 1;
+  optional bool enabled = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message ScheduledTasksResponse {
+  repeated ScheduledTask tasks = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message ScheduledTask {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  string schedule = 4;
+  string data = 5;
+  bool enabled = 6;
+  string lastRunAt = 7;
+  string nextRunAt = 8;
+  string createdAt = 9;
+  string updatedAt = 10;
+} 

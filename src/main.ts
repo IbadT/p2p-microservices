@@ -8,6 +8,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { initSentry } from './helpers/instrument';
 import { join } from 'path';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { ValidationPipe } from '@nestjs/common';
 
 declare const module: any;
 
@@ -19,6 +20,11 @@ async function bootstrap() {
     new SentryExceptionFilter(),
     new PrismaExceptionFilter(),
   );
+
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true,
+  }));
 
   app.setGlobalPrefix('api');
 
