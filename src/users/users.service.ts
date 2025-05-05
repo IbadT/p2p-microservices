@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -12,57 +15,98 @@ export class UsersService {
   async createUser(data: {
     email: string;
     password: string;
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-    isExchanger: boolean;
+    role: UserRole;
+    isExchangerActive?: boolean;
   }) {
     const user = await this.prisma.user.create({
       data: {
         email: data.email,
         password: data.password,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phoneNumber: data.phoneNumber,
-        isExchanger: data.isExchanger,
-        isExchangerActive: false,
-        isFrozen: false,
+        role: data.role,
+        isExchangerActive: data.isExchangerActive || false,
       },
     });
 
-    await this.kafka.emit('user.created', {
-      userId: user.id,
-      email: user.email,
-      isExchanger: user.isExchanger,
-    });
+    await this.kafka.sendEvent({
+      type: '',
+      payload: {
+        userId: user.id,
+        email: user.email,
+        isExchangerActive: user.isExchangerActive,
+      }
+    })
 
     return user;
   }
 
-  async updateUser(userId: string, data: {
-    firstName?: string;
-    lastName?: string;
-    phoneNumber?: string;
-    isExchanger?: boolean;
+  async updateUser(id: string, data: {
+    email?: string;
+    password?: string;
+    role?: UserRole;
     isExchangerActive?: boolean;
+    isFrozen?: boolean;
+    frozenUntil?: Date;
+    missedOffersCount?: number;
   }) {
     const user = await this.prisma.user.update({
-      where: { id: userId },
-      data,
+      where: { id },
+      data: {
+        email: data.email,
+        password: data.password,
+        role: data.role,
+        isExchangerActive: data.isExchangerActive,
+        isFrozen: data.isFrozen,
+        frozenUntil: data.frozenUntil,
+        missedOffersCount: data.missedOffersCount,
+      },
     });
 
-    await this.kafka.emit('user.updated', {
-      userId: user.id,
-      isExchanger: user.isExchanger,
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        userId: user.id,
+        isExchangerActive: user.isExchangerActive,
+      }
+    })
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
       isExchangerActive: user.isExchangerActive,
-    });
-
-    return user;
+      isFrozen: user.isFrozen,
+      frozenUntil: user.frozenUntil,
+      missedOffersCount: user.missedOffersCount,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
   async getUser(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
     });
+  }
+
+  async getUserById(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isExchangerActive: user.isExchangerActive,
+      isFrozen: user.isFrozen,
+      frozenUntil: user.frozenUntil,
+      missedOffersCount: user.missedOffersCount,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }

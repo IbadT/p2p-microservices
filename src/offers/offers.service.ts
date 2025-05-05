@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -25,11 +26,19 @@ export class OffersService {
     // Start transaction
     return this.prisma.$transaction(async (prisma) => {
       // Create hold on user's balance
-      await this.kafka.emit('balance.hold.create', {
+      // await this.kafka.emit('balance.hold.create', {
+      //   userId,
+      //   amount: data.amount,
+      //   type: 'EXCHANGE_OFFER',
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         userId,
         amount: data.amount,
         type: 'EXCHANGE_OFFER',
-      });
+      }
+    });
 
       // Create offer
       const offer = await prisma.exchangeOffer.create({
@@ -41,11 +50,19 @@ export class OffersService {
       });
 
       // Emit Kafka event
-      await this.kafka.emit('exchange.offer.created', {
+      // await this.kafka.emit('exchange.offer.created', {
+      //   offer,
+      //   userId,
+      //   listingId: data.listingId,
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         offer,
         userId,
         listingId: data.listingId,
-      });
+      }
+    });
 
       // Create transaction
       const transaction = await prisma.exchangeTransaction.create({
@@ -65,10 +82,17 @@ export class OffersService {
       });
 
       // Emit Kafka event
-      await this.kafka.emit('exchange.transaction.created', {
+      // await this.kafka.emit('exchange.transaction.created', {
+      //   transaction,
+      //   offerId: offer.id,
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         transaction,
         offerId: offer.id,
-      });
+      }
+    });
 
       return offer;
     });

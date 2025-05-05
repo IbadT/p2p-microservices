@@ -1,51 +1,45 @@
-import { Controller } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { SchedulerService } from './scheduler.service';
-import { 
-  CreateScheduledTaskRequest, 
-  UpdateScheduledTaskRequest, 
-  GetScheduledTaskRequest, 
-  ListScheduledTasksRequest 
-} from '../proto/generated/scheduler.pb';
+import { TaskStatus } from '@prisma/client';
 
-
-@Controller()
+@Controller('scheduler')
 export class SchedulerController {
   constructor(private readonly schedulerService: SchedulerService) {}
 
-  @GrpcMethod('SchedulerService', 'CreateScheduledTask')
-  async createScheduledTask(data: CreateScheduledTaskRequest) {
-    return this.schedulerService.createScheduledTask({
-      name: data.name,
-      type: data.type,
-      schedule: data.schedule,
-      data: data.data,
-      enabled: data.enabled,
-    });
+  @Post('tasks')
+  async createTask(@Body() data: {
+    type: string;
+    data: any;
+    scheduledAt: Date;
+  }) {
+    return this.schedulerService.createScheduledTask(data);
   }
 
-  @GrpcMethod('SchedulerService', 'UpdateScheduledTask')
-  async updateScheduledTask(data: UpdateScheduledTaskRequest) {
-    return this.schedulerService.updateScheduledTask(data.taskId, {
-      name: data.name,
-      schedule: data.schedule,
-      data: data.data,
-      enabled: data.enabled,
-    });
+  @Post('tasks/:id')
+  async updateTask(
+    @Param('id') id: string,
+    @Body() data: {
+      status?: TaskStatus;
+      data?: any;
+      scheduledAt?: Date;
+      executedAt?: Date;
+    }
+  ) {
+    return this.schedulerService.updateScheduledTask(id, data);
   }
 
-  @GrpcMethod('SchedulerService', 'GetScheduledTask')
-  async getScheduledTask(data: GetScheduledTaskRequest) {
-    return this.schedulerService.getScheduledTask(data.taskId);
+  @Get('tasks')
+  async listTasks(@Query() data: {
+    type?: string;
+    status?: TaskStatus;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.schedulerService.listScheduledTasks(data);
   }
 
-  @GrpcMethod('SchedulerService', 'ListScheduledTasks')
-  async listScheduledTasks(data: ListScheduledTasksRequest) {
-    return this.schedulerService.listScheduledTasks({
-      type: data.type,
-      enabled: data.enabled,
-      page: data.page,
-      limit: data.limit,
-    });
+  @Get('tasks/:id')
+  async getTask(@Param('id') id: string) {
+    return this.schedulerService.getScheduledTask(id);
   }
 }

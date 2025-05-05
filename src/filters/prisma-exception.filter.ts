@@ -10,18 +10,18 @@ import { Prisma } from '@prisma/client';
 import { Response, Request } from 'express';
 import * as Sentry from '@sentry/node';
 
+// Импортируем конкретные типы ошибок Prisma из правильного места
+import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
+
 /**
  * Фильтр исключений для обработки ошибок Prisma
- * Преобразует ошибки Prisma в понятные HTTP-ответы и отправляет их в Sentry
  */
-@Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientValidationError)
+@Catch(PrismaClientKnownRequestError, PrismaClientValidationError)
 export class PrismaExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(PrismaExceptionFilter.name);
 
   /**
    * Обработка исключения
-   * @param exception Исключение
-   * @param host Хост запроса
    */
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -59,8 +59,8 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     message: string;
     errorCode?: string;
   } {
-    // Обработка ошибок Prisma
-    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+    // Обработка ошибок Prisma Known Request Error
+    if (exception instanceof PrismaClientKnownRequestError) {
       switch (exception.code) {
         case 'P2002':
           return {
@@ -101,8 +101,8 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // Обработка ошибок Prisma валидации
-    if (exception instanceof Prisma.PrismaClientValidationError) {
+    // Обработка ошибок Prisma Validation Error
+    if (exception instanceof PrismaClientValidationError) {
       return {
         status: HttpStatus.BAD_REQUEST,
         message: 'Ошибка валидации данных',

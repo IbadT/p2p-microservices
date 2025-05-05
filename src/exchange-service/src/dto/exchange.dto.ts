@@ -1,4 +1,18 @@
-import { ExchangeType, PaymentMethod } from '@prisma/client';
+// import { ExchangeType, PaymentMethod } from '@prisma/client';
+
+enum PaymentMethod {
+  BANK_TRANSFER,
+  PAYPAL,
+  WISE,
+  CASH,
+  // Добавьте другие методы по необходимости
+}
+
+enum ExchangeType {
+  CRYPTO_TO_FIAT,
+  FIAT_TO_CRYPTO
+}
+
 
 export class CreateExchangeListingDto {
   type: ExchangeType;

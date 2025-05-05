@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class AuditService {
@@ -21,12 +23,22 @@ export class AuditService {
       data,
     });
 
-    await this.kafka.emit('audit.log.created', {
-      auditLogId: auditLog.id,
-      userId: auditLog.userId,
-      action: auditLog.action,
-      entityType: auditLog.entityType,
-      entityId: auditLog.entityId,
+    // await this.kafka.emit('audit.log.created', {
+    //   auditLogId: auditLog.id,
+    //   userId: auditLog.userId,
+    //   action: auditLog.action,
+    //   entityType: auditLog.entityType,
+    //   entityId: auditLog.entityId,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        auditLogId: auditLog.id,
+        userId: auditLog.userId,
+        action: auditLog.action,
+        entityType: auditLog.entityType,
+        entityId: auditLog.entityId,
+      }
     });
 
     return auditLog;

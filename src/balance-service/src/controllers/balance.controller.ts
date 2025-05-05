@@ -1,7 +1,9 @@
 import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { BalanceService } from '../services/balance.service';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { User } from '../decorators/user.decorator';
+// import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+// import { User } from '../decorators/user.decorator';
+import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
+import { User } from 'src/shared/decorators/user.decorator';
 
 class DepositDto {
   cryptocurrency: string;

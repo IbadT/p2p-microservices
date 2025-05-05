@@ -1,37 +1,39 @@
-import { Controller } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { Controller, Post, Get, Put, Body, Param } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserRequest, UpdateUserRequest, GetUserRequest } from '../proto/generated/user.pb';
+import { UserRole } from '@prisma/client';
 
-@Controller()
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @GrpcMethod('UserService', 'CreateUser')
-  async createUser(data: CreateUserRequest) {
-    return this.usersService.createUser({
-      email: data.email,
-      password: data.password,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      phoneNumber: data.phoneNumber,
-      isExchanger: data.isExchanger,
-    });
+  @Post()
+  async createUser(@Body() data: {
+    email: string;
+    password: string;
+    role: UserRole;
+    isExchangerActive?: boolean;
+  }) {
+    return this.usersService.createUser(data);
   }
 
-  @GrpcMethod('UserService', 'UpdateUser')
-  async updateUser(data: UpdateUserRequest) {
-    return this.usersService.updateUser(data.userId, {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      phoneNumber: data.phoneNumber,
-      isExchanger: data.isExchanger,
-      isExchangerActive: data.isExchangerActive,
-    });
+  @Put(':id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() data: {
+      email?: string;
+      password?: string;
+      role?: UserRole;
+      isExchangerActive?: boolean;
+      isFrozen?: boolean;
+      frozenUntil?: Date;
+      missedOffersCount?: number;
+    }
+  ) {
+    return this.usersService.updateUser(id, data);
   }
 
-  @GrpcMethod('UserService', 'GetUser')
-  async getUser(data: GetUserRequest) {
-    return this.usersService.getUser(data.userId);
+  @Get(':id')
+  async getUser(@Param('id') id: string) {
+    return this.usersService.getUserById(id);
   }
 }

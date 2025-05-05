@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Module({
   imports: [
@@ -13,7 +15,7 @@ import { KafkaService } from '../shared/kafka.service';
         transport: Transport.GRPC,
         options: {
           package: 'audit',
-          protoPath: 'proto/audit.proto',
+          protoPath: 'src/proto/audit.proto',
         },
       },
     ]),

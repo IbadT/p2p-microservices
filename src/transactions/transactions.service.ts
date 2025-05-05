@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../shared/kafka.service';
-import { Prisma } from '@prisma/client';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { Prisma, TransactionStatus } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -34,7 +35,7 @@ export class TransactionsService {
     const updatedTransaction = await this.prisma.exchangeTransaction.update({
       where: { id: transactionId },
       data: {
-        status: data.status,
+        status: data.status as TransactionStatus,
         paymentProof: data.paymentProof,
         canCustomerDispute: this.calculateCustomerDisputeAbility(data.status),
         canExchangerDispute: this.calculateExchangerDisputeAbility(data.status),
@@ -42,11 +43,20 @@ export class TransactionsService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('exchange.transaction.statusChanged', {
-      transaction: updatedTransaction,
-      previousStatus: transaction.status,
-      newStatus: data.status,
-      updatedBy: userId,
+    // await this.kafka.emit('exchange.transaction.statusChanged', {
+    //   transaction: updatedTransaction,
+    //   previousStatus: transaction.status,
+    //   newStatus: data.status,
+    //   updatedBy: userId,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        transaction: updatedTransaction,
+        previousStatus: transaction.status,
+        newStatus: data.status,
+        updatedBy: userId,
+      }
     });
 
     // Handle status-specific actions
@@ -82,19 +92,34 @@ export class TransactionsService {
     switch (transaction.status) {
       case 'COMPLETED':
         // Release crypto to buyer
-        await this.kafka.emit('balance.transfer', {
-          fromUserId: transaction.exchangerId,
-          toUserId: transaction.customerId,
-          amount: transaction.cryptoAmount,
-          cryptocurrency: transaction.cryptocurrency,
+        // await this.kafka.emit('balance.transfer', {
+        //   fromUserId: transaction.exchangerId,
+        //   toUserId: transaction.customerId,
+        //   amount: transaction.cryptoAmount,
+        //   cryptocurrency: transaction.cryptocurrency,
+        // });
+        await this.kafka.sendEvent({
+          type: "",
+          payload: {
+            fromUserId: transaction.exchangerId,
+            toUserId: transaction.customerId,
+            amount: transaction.cryptoAmount,
+            cryptocurrency: transaction.cryptocurrency,
+          }
         });
         break;
 
       case 'CANCELLED':
       case 'DECLINED':
         // Return held funds
-        await this.kafka.emit('balance.hold.release', {
-          transactionId: transaction.id,
+        // await this.kafka.emit('balance.hold.release', {
+        //   transactionId: transaction.id,
+        // });
+        await this.kafka.sendEvent({
+          type: "",
+          payload: {
+            transactionId: transaction.id,
+          }
         });
         break;
 
@@ -107,7 +132,13 @@ export class TransactionsService {
             isActive: false,
           },
         });
-        await this.kafka.emit('exchange.transaction.finished', { transaction });
+        // await this.kafka.emit('exchange.transaction.finished', { transaction });
+        await this.kafka.sendEvent({
+          type: "",
+          payload: {
+            transaction
+          }
+        });
         break;
     }
   }
@@ -139,6 +170,17 @@ export class TransactionsService {
             email: true,
           },
         },
+      },
+    });
+  }
+
+  async updateTransaction(id: string, data: {
+    status?: TransactionStatus;
+  }) {
+    return this.prisma.exchangeTransaction.update({
+      where: { id },
+      data: {
+        status: data.status as TransactionStatus,
       },
     });
   }

@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../shared/kafka.service';
-import { ExchangeType, PaymentMethod, Prisma } from '../../generated/prisma';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+// import { ExchangeType, PaymentMethod, Prisma } from '../../generated/prisma';
+import { ExchangeType, PaymentMethod, Prisma } from '@prisma/client';
 
 @Injectable()
 export class ListingsService {
@@ -30,9 +32,16 @@ export class ListingsService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('exchange.listing.created', {
-      listing,
-      userId,
+    // await this.kafka.emit('exchange.listing.created', {
+    //   listing,
+    //   userId,
+    // });
+    await this.kafka.sendEvent({
+      type: "exchange.listing.statusChanged",
+      payload: {
+        listing,
+        userId,
+      }
     });
 
     return listing;
@@ -82,9 +91,16 @@ export class ListingsService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('exchange.listing.statusChanged', {
-      listingId,
-      isActive,
+    // await this.kafka.emit('exchange.listing.statusChanged', {
+    //   listingId,
+    //   isActive,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        listingId,
+        isActive,
+      }
     });
 
     return listing;
@@ -96,8 +112,14 @@ export class ListingsService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('exchange.listing.deleted', {
-      listingId,
+    // await this.kafka.emit('exchange.listing.deleted', {
+    //   listingId,
+    // });
+    await this.kafka.sendEvent({
+      type: "exchange.listing.deleted",
+      payload: {
+        listingId
+      }
     });
 
     return listing;

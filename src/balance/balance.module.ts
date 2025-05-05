@@ -3,7 +3,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BalanceController } from './balance.controller';
 import { BalanceService } from './balance.service';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { KafkaService } from '../shared/kafka.service';
         transport: Transport.GRPC,
         options: {
           package: 'balance',
-          protoPath: 'proto/balance.proto',
+          protoPath: 'src/proto/balance.proto',
         },
       },
     ]),

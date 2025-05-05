@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Prisma, ScheduledTask, TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class SchedulerService {
@@ -11,64 +14,54 @@ export class SchedulerService {
   ) {}
 
   async createScheduledTask(data: {
-    name: string;
     type: string;
-    schedule: string;
-    data: string;
-    enabled: boolean;
+    data: any;
+    scheduledAt: Date;
   }) {
-    const task = await this.prisma.scheduledTask.create({
-      data,
+    return this.prisma.scheduledTask.create({
+      data: {
+        type: data.type,
+        data: data.data,
+        scheduledAt: data.scheduledAt,
+        status: TaskStatus.PENDING,
+      },
     });
-
-    await this.kafka.emit('scheduler.task.created', {
-      taskId: task.id,
-      name: task.name,
-      type: task.type,
-      schedule: task.schedule,
-    });
-
-    return task;
   }
 
-  async updateScheduledTask(taskId: string, data: {
-    name?: string;
-    schedule?: string;
-    data?: string;
-    enabled?: boolean;
+  async updateScheduledTask(id: string, data: {
+    status?: TaskStatus;
+    data?: any;
+    scheduledAt?: Date;
+    executedAt?: Date;
   }) {
-    const task = await this.prisma.scheduledTask.update({
-      where: { id: taskId },
-      data,
+    return this.prisma.scheduledTask.update({
+      where: { id },
+      data: {
+        status: data.status,
+        data: data.data,
+        scheduledAt: data.scheduledAt,
+        executedAt: data.executedAt,
+      },
     });
-
-    await this.kafka.emit('scheduler.task.updated', {
-      taskId: task.id,
-      name: task.name,
-      schedule: task.schedule,
-      enabled: task.enabled,
-    });
-
-    return task;
   }
 
-  async getScheduledTask(taskId: string) {
+  async getScheduledTask(id: string) {
     return this.prisma.scheduledTask.findUnique({
-      where: { id: taskId },
+      where: { id },
     });
   }
 
   async listScheduledTasks(filters: {
     type?: string;
-    enabled?: boolean;
+    status?: TaskStatus;
     page?: number;
     limit?: number;
   }) {
-    const { type, enabled, page = 1, limit = 10 } = filters;
-
+    const { type, status, page = 1, limit = 10 } = filters;
+    
     const where = {
       ...(type && { type }),
-      ...(enabled !== undefined && { enabled }),
+      ...(status && { status }),
     };
 
     const [total, tasks] = await Promise.all([
@@ -77,7 +70,7 @@ export class SchedulerService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { scheduledAt: 'asc' },
       }),
     ]);
 
@@ -93,8 +86,8 @@ export class SchedulerService {
   async handleScheduledTasks() {
     const tasks = await this.prisma.scheduledTask.findMany({
       where: {
-        enabled: true,
-        nextRunAt: {
+        status: TaskStatus.PENDING,
+        scheduledAt: {
           lte: new Date(),
         },
       },
@@ -102,35 +95,31 @@ export class SchedulerService {
 
     for (const task of tasks) {
       try {
-        await this.kafka.emit('scheduler.task.executed', {
-          taskId: task.id,
-          name: task.name,
-          type: task.type,
-          data: task.data,
+        await this.kafka.sendEvent({
+          type: "",
+          payload: {
+            taskId: task.id,
+            type: task.type,
+            data: task.data,
+          }
         });
 
-        // Update next run time based on schedule
-        const nextRunAt = this.calculateNextRunTime(task.schedule);
         await this.prisma.scheduledTask.update({
           where: { id: task.id },
           data: {
-            lastRunAt: new Date(),
-            nextRunAt,
+            status: TaskStatus.COMPLETED,
+            executedAt: new Date(),
           },
         });
       } catch (error) {
-        await this.kafka.emit('scheduler.task.failed', {
-          taskId: task.id,
-          name: task.name,
-          error: error.message,
+        await this.kafka.sendEvent({
+          type: "",
+          payload: {
+            taskId: task.id,
+            error: error.message,
+          }
         });
       }
     }
-  }
-
-  private calculateNextRunTime(schedule: string): Date {
-    // Implement schedule parsing logic here
-    // For now, just return a date 1 hour from now
-    return new Date(Date.now() + 60 * 60 * 1000);
   }
 }

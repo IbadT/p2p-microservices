@@ -19,11 +19,11 @@ export class OffersController {
     // Запуск 30-минутного таймера
   }
 
-  @Post(':id/decline')
-  declineOffer(@Param('id') id: string) { ... }
+  // @Post(':id/decline')
+  // declineOffer(@Param('id') id: string) { ... }
 
-  @Get(':id/time-left')
-  getOfferTimeLeft(@Param('id') id: string) { ... }
+  // @Get(':id/time-left')
+  // getOfferTimeLeft(@Param('id') id: string) { ... }
 
   @GrpcMethod('ExchangeService', 'CreateOffer')
   async createOfferGrpc(data: CreateOfferRequest) {

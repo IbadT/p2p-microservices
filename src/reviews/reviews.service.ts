@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
+import { Prisma } from '@prisma/client';
+import { CreateReviewDto } from './dto/create-review.dto';
 
 @Injectable()
 export class ReviewsService {
@@ -9,26 +13,27 @@ export class ReviewsService {
     private kafka: KafkaService,
   ) {}
 
-  async createReview(data: {
-    reviewerId: string;
-    reviewedId: string;
-    rating: number;
-    comment: string;
-    exchangeId: string;
-  }) {
-    const review = await this.prisma.review.create({
-      data,
+  async createReview(data: CreateReviewDto) {
+    return this.prisma.review.create({
+      data: {
+        rating: data.rating,
+        comment: data.comment,
+        transaction: {
+          connect: { id: data.transactionId }
+        },
+        author: {
+          connect: { id: data.authorId }
+        },
+        target: {
+          connect: { id: data.targetId }
+        }
+      },
+      include: {
+        transaction: true,
+        author: true,
+        target: true
+      }
     });
-
-    await this.kafka.emit('review.created', {
-      reviewId: review.id,
-      reviewerId: review.reviewerId,
-      reviewedId: review.reviewedId,
-      rating: review.rating,
-      exchangeId: review.exchangeId,
-    });
-
-    return review;
   }
 
   async updateReview(reviewId: string, data: {
@@ -40,18 +45,45 @@ export class ReviewsService {
       data,
     });
 
-    await this.kafka.emit('review.updated', {
-      reviewId: review.id,
-      rating: review.rating,
+    // await this.kafka.emit('review.updated', {
+    //   reviewId: review.id,
+    //   rating: review.rating,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        reviewId: review.id,
+        rating: review.rating,
+      }
     });
 
     return review;
   }
 
-  async getReview(reviewId: string) {
-    return this.prisma.review.findUnique({
-      where: { id: reviewId },
+  async getReview(id: string) {
+    const review = await this.prisma.review.findUnique({
+      where: { id },
+      include: {
+        transaction: true,
+        author: true,
+        target: true,
+      },
     });
+
+    if (!review) {
+      return null;
+    }
+
+    return {
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      transactionId: review.transactionId,
+      authorId: review.authorId,
+      targetId: review.targetId,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+    };
   }
 
   async getUserReviews(filters: {
@@ -82,5 +114,21 @@ export class ReviewsService {
       page,
       limit,
     };
+  }
+
+  async getReviewsByUserId(userId: string) {
+    return this.prisma.review.findMany({
+      where: {
+        OR: [
+          { authorId: userId },
+          { targetId: userId }
+        ]
+      },
+      include: {
+        transaction: true,
+        author: true,
+        target: true
+      }
+    });
   }
 }

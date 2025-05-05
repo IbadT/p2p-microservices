@@ -1,9 +1,13 @@
 import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
 import { DisputeService } from '../services/dispute.service';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { RolesGuard } from '../guards/roles.guard';
-import { Roles } from '../decorators/roles.decorator';
-import { User } from '../decorators/user.decorator';
+// import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+// import { RolesGuard } from '../guards/roles.guard';
+// import { Roles } from '../decorators/roles.decorator';
+// import { User } from '../decorators/user.decorator';
+import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/shared/guards/roles.guard';
+import { Roles } from 'src/shared/decorators/roles.decorator';
+import { User } from 'src/shared/decorators/user.decorator';
 
 class CreateDisputeDto {
   transactionId: string;

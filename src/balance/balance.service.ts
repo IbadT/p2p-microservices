@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CryptoBalance, HoldAmount, UserBalanceData } from '../types/balance.types';
 
@@ -12,68 +14,46 @@ export class BalanceService {
   ) {}
 
   async getBalance(userId: string) {
-    return this.prisma.balance.findUnique({
-      where: { userId },
-    });
-  }
-
-  async updateBalance(userId: string, data: {
-    amount: number;
-    currency: string;
-    type: 'CREDIT' | 'DEBIT';
-  }) {
-    const balance = await this.prisma.balance.findUnique({
+    const balance = await this.prisma.userBalance.findUnique({
       where: { userId },
     });
 
     if (!balance) {
-      throw new Error('Balance not found');
+      return this.prisma.userBalance.create({
+        data: {
+          userId,
+          cryptoBalance: {} as CryptoBalance,
+          totalHoldAmount: {} as HoldAmount,
+        },
+      });
     }
 
-    const updatedBalance = await this.prisma.balance.update({
-      where: { userId },
-      data: {
-        amount: data.type === 'CREDIT' 
-          ? balance.amount + data.amount 
-          : balance.amount - data.amount,
-      },
-    });
-
-    await this.kafka.emit('balance.updated', {
-      userId,
-      amount: updatedBalance.amount,
-      currency: updatedBalance.currency,
-    });
-
-    return updatedBalance;
+    return balance;
   }
 
-  async createTransaction(data: {
-    userId: string;
-    amount: number;
-    currency: string;
-    type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
-    status: 'PENDING' | 'COMPLETED' | 'FAILED';
-    description?: string;
-  }) {
-    const transaction = await this.prisma.transaction.create({
+  async updateBalance(userId: string, data: Prisma.UserBalanceUpdateInput) {
+    return this.prisma.userBalance.update({
+      where: { userId },
       data,
     });
-
-    await this.kafka.emit('transaction.created', {
-      transactionId: transaction.id,
-      userId: transaction.userId,
-      amount: transaction.amount,
-      type: transaction.type,
-      status: transaction.status,
-    });
-
-    return transaction;
   }
 
-  async getTransaction(transactionId: string) {
-    return this.prisma.transaction.findUnique({
-      where: { id: transactionId },
+  async createTransaction(data: Prisma.ExchangeTransactionCreateInput) {
+    return this.prisma.exchangeTransaction.create({
+      data,
+    });
+  }
+
+  async getTransaction(id: string) {
+    return this.prisma.exchangeTransaction.findUnique({
+      where: { id },
+    });
+  }
+
+  async updateTransaction(id: string, data: Prisma.ExchangeTransactionUpdateInput) {
+    return this.prisma.exchangeTransaction.update({
+      where: { id },
+      data,
     });
   }
 
@@ -86,8 +66,10 @@ export class BalanceService {
   ) {
     return this.prisma.$transaction(async (prisma) => {
       const balance = await this.getBalance(userId);
-      const currentBalance = balance.cryptoBalance[cryptocurrency] || 0;
-      const currentHold = balance.totalHoldAmount[cryptocurrency] || 0;
+      if (!balance) throw new Error('Balance not found');
+
+      const currentBalance = (balance.cryptoBalance as CryptoBalance)[cryptocurrency] || 0;
+      const currentHold = (balance.totalHoldAmount as HoldAmount)[cryptocurrency] || 0;
 
       if (currentBalance - currentHold < amount) {
         throw new Error('Insufficient balance');
@@ -110,19 +92,28 @@ export class BalanceService {
         where: { userId },
         data: {
           totalHoldAmount: {
-            ...balance.totalHoldAmount,
+            ...(balance.totalHoldAmount as HoldAmount),
             [cryptocurrency]: currentHold + amount,
           },
         },
       });
 
       // Emit Kafka event
-      await this.kafka.emit('balance.hold.created', {
+      // await this.kafka.emit('balance.hold.created', {
+      //   hold,
+      //   userId,
+      //   cryptocurrency,
+      //   amount,
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         hold,
         userId,
         cryptocurrency,
         amount,
-      });
+      }
+    });
 
       return hold;
     });
@@ -139,14 +130,16 @@ export class BalanceService {
       }
 
       const balance = await this.getBalance(hold.userId);
-      const currentHold = balance.totalHoldAmount[hold.cryptocurrency] || 0;
+      if (!balance) throw new Error('Balance not found');
+
+      const currentHold = (balance.totalHoldAmount as HoldAmount)[hold.cryptocurrency] || 0;
 
       // Update total hold amount
       await prisma.userBalance.update({
         where: { userId: hold.userId },
         data: {
           totalHoldAmount: {
-            ...balance.totalHoldAmount,
+            ...(balance.totalHoldAmount as HoldAmount),
             [hold.cryptocurrency]: Math.max(0, currentHold - hold.amount),
           },
         },
@@ -158,12 +151,21 @@ export class BalanceService {
       });
 
       // Emit Kafka event
-      await this.kafka.emit('balance.hold.released', {
+      // await this.kafka.emit('balance.hold.released', {
+      //   holdId,
+      //   userId: hold.userId,
+      //   cryptocurrency: hold.cryptocurrency,
+      //   amount: hold.amount,
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         holdId,
         userId: hold.userId,
         cryptocurrency: hold.cryptocurrency,
         amount: hold.amount,
-      });
+      }
+    });
     });
   }
 
@@ -179,9 +181,13 @@ export class BalanceService {
         this.getBalance(toUserId),
       ]);
 
-      const fromAmount = fromBalance.cryptoBalance[cryptocurrency] || 0;
-      const fromHold = fromBalance.totalHoldAmount[cryptocurrency] || 0;
-      const toAmount = toBalance.cryptoBalance[cryptocurrency] || 0;
+      if (!fromBalance || !toBalance) {
+        throw new Error('Balance not found');
+      }
+
+      const fromAmount = (fromBalance.cryptoBalance as CryptoBalance)[cryptocurrency] || 0;
+      const fromHold = (fromBalance.totalHoldAmount as HoldAmount)[cryptocurrency] || 0;
+      const toAmount = (toBalance.cryptoBalance as CryptoBalance)[cryptocurrency] || 0;
 
       if (fromAmount - fromHold < amount) {
         throw new Error('Insufficient balance');
@@ -193,7 +199,7 @@ export class BalanceService {
           where: { userId: fromUserId },
           data: {
             cryptoBalance: {
-              ...fromBalance.cryptoBalance,
+              ...(fromBalance.cryptoBalance as CryptoBalance),
               [cryptocurrency]: fromAmount - amount,
             },
           },
@@ -202,7 +208,7 @@ export class BalanceService {
           where: { userId: toUserId },
           data: {
             cryptoBalance: {
-              ...toBalance.cryptoBalance,
+              ...(toBalance.cryptoBalance as CryptoBalance),
               [cryptocurrency]: toAmount + amount,
             },
           },
@@ -210,35 +216,48 @@ export class BalanceService {
       ]);
 
       // Emit Kafka event
-      await this.kafka.emit('balance.transferred', {
+      // await this.kafka.emit('balance.transferred', {
+      //   fromUserId,
+      //   toUserId,
+      //   cryptocurrency,
+      //   amount,
+      // });
+      await this.kafka.sendEvent({
+      type: "",
+      payload: {
         fromUserId,
         toUserId,
         cryptocurrency,
         amount,
-      });
+      }
+    });
     });
   }
 
   async deposit(userId: string, cryptocurrency: string, amount: number) {
     const balance = await this.getBalance(userId);
-    const currentAmount = balance.cryptoBalance[cryptocurrency] || 0;
+    if (!balance) throw new Error('Balance not found');
+
+    const currentAmount = (balance.cryptoBalance as CryptoBalance)[cryptocurrency] || 0;
 
     const updatedBalance = await this.prisma.userBalance.update({
       where: { userId },
       data: {
         cryptoBalance: {
-          ...balance.cryptoBalance,
+          ...(balance.cryptoBalance as CryptoBalance),
           [cryptocurrency]: currentAmount + amount,
         },
       },
     });
 
-    // Emit Kafka event
-    await this.kafka.emit('balance.deposited', {
-      userId,
-      cryptocurrency,
-      amount,
-      newBalance: updatedBalance.cryptoBalance[cryptocurrency],
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        userId,
+        cryptocurrency,
+        amount,
+        newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
+      }
     });
 
     return updatedBalance;
@@ -247,8 +266,10 @@ export class BalanceService {
   async withdraw(userId: string, cryptocurrency: string, amount: number) {
     return this.prisma.$transaction(async (prisma) => {
       const balance = await this.getBalance(userId);
-      const currentAmount = balance.cryptoBalance[cryptocurrency] || 0;
-      const currentHold = balance.totalHoldAmount[cryptocurrency] || 0;
+      if (!balance) throw new Error('Balance not found');
+
+      const currentAmount = (balance.cryptoBalance as CryptoBalance)[cryptocurrency] || 0;
+      const currentHold = (balance.totalHoldAmount as HoldAmount)[cryptocurrency] || 0;
 
       if (currentAmount - currentHold < amount) {
         throw new Error('Insufficient balance');
@@ -258,18 +279,20 @@ export class BalanceService {
         where: { userId },
         data: {
           cryptoBalance: {
-            ...balance.cryptoBalance,
+            ...(balance.cryptoBalance as CryptoBalance),
             [cryptocurrency]: currentAmount - amount,
           },
         },
       });
 
-      // Emit Kafka event
-      await this.kafka.emit('balance.withdrawn', {
-        userId,
-        cryptocurrency,
-        amount,
-        newBalance: updatedBalance.cryptoBalance[cryptocurrency],
+      await this.kafka.sendEvent({
+        type: "",
+        payload: {
+          userId,
+          cryptocurrency,
+          amount,
+          newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
+        }
       });
 
       return updatedBalance;

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -46,11 +47,19 @@ export class DisputesService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('dispute.created', {
-      dispute,
-      transactionId,
-      initiatorId,
-    });
+    // await this.kafka.emit('dispute.created', {
+    //   dispute,
+    //   transactionId,
+    //   initiatorId,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        dispute,
+        transactionId,
+        initiatorId,
+      }
+    })
 
     return dispute;
   }
@@ -93,11 +102,19 @@ export class DisputesService {
     });
 
     // Emit Kafka event
-    await this.kafka.emit('dispute.resolved', {
-      dispute: resolvedDispute,
-      winnerUserId,
-      moderatorId,
-    });
+    // await this.kafka.emit('dispute.resolved', {
+    //   dispute: resolvedDispute,
+    //   winnerUserId,
+    //   moderatorId,
+    // });
+    await this.kafka.sendEvent({
+      type: "",
+      payload: {
+        dispute: resolvedDispute,
+        winnerUserId,
+        moderatorId,
+      }
+    })
 
     return resolvedDispute;
   }

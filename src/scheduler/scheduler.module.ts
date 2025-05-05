@@ -3,8 +3,10 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerController } from './scheduler.controller';
 import { SchedulerService } from './scheduler.service';
-import { PrismaService } from '../shared/prisma.service';
-import { KafkaService } from '../shared/kafka.service';
+// import { PrismaService } from '../shared/prisma.service';
+// import { KafkaService } from '../shared/kafka.service';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Module({
   imports: [
@@ -15,7 +17,7 @@ import { KafkaService } from '../shared/kafka.service';
         transport: Transport.GRPC,
         options: {
           package: 'scheduler',
-          protoPath: 'proto/scheduler.proto',
+          protoPath: 'src/proto/scheduler.proto',
         },
       },
     ]),
