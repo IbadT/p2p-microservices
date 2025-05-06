@@ -3,6 +3,8 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { USER_SERVICE } from '../constants';
 import { CreateUserDto, UpdateUserDto } from '../interfaces/client.swagger';
+import { Observable, from } from 'rxjs';
+import { UserService, User } from '../interfaces/grpc.interfaces';
 
 @Injectable()
 export class UserGrpcClient extends BaseGrpcClient {
@@ -17,9 +19,9 @@ export class UserGrpcClient extends BaseGrpcClient {
    * @param dto - Данные для создания пользователя
    * @returns {Promise<User>} Созданный пользователь
    */
-  async createUser(dto: CreateUserDto) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.createUser, dto);
+  createUser(dto: CreateUserDto): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.createUser, dto));
   }
 
   /**
@@ -27,19 +29,19 @@ export class UserGrpcClient extends BaseGrpcClient {
    * @param dto - Данные для обновления
    * @returns {Promise<User>} Обновленный пользователь
    */
-  async updateUser(dto: UpdateUserDto) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.updateUser, dto);
+  updateUser(data: UpdateUserDto): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.updateUser, data));
   }
 
   /**
    * Получает пользователя по ID
-   * @param userId - ID пользователя
+   * @param id - ID пользователя
    * @returns {Promise<User>} Пользователь
    */
-  async getUser(userId: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.getUser, { userId });
+  getUser(id: string): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.getUser, { id }));
   }
 
   /**
@@ -47,9 +49,9 @@ export class UserGrpcClient extends BaseGrpcClient {
    * @param email - Email пользователя
    * @returns {Promise<User>} Пользователь
    */
-  async getUserByEmail(email: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.getUserByEmail, { email });
+  getUserByEmail(email: string): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.getUserByEmail, { email }));
   }
 
   /**
@@ -57,49 +59,54 @@ export class UserGrpcClient extends BaseGrpcClient {
    * @param query - Параметры фильтрации
    * @returns {Promise<User[]>} Список пользователей
    */
-  async getUsers(query: { role?: string; isExchangerActive?: boolean }) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.getUsers, query);
+  getUsers(query: { role?: string; isExchangerActive?: boolean }): Observable<User[]> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.getUsers, query));
   }
 
   /**
    * Активирует обменника
-   * @param userId - ID пользователя
+   * @param id - ID пользователя
    * @returns {Promise<User>} Обновленный пользователь
    */
-  async activateExchanger(userId: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.activateExchanger, { userId });
+  activateExchanger(id: string): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.activateExchanger, { id }));
   }
 
   /**
    * Деактивирует обменника
-   * @param userId - ID пользователя
+   * @param id - ID пользователя
    * @returns {Promise<User>} Обновленный пользователь
    */
-  async deactivateExchanger(userId: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.deactivateExchanger, { userId });
+  deactivateExchanger(id: string): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.deactivateExchanger, { id }));
   }
 
   /**
    * Замораживает пользователя
-   * @param userId - ID пользователя
+   * @param id - ID пользователя
    * @param reason - Причина заморозки
    * @returns {Promise<User>} Обновленный пользователь
    */
-  async freezeUser(userId: string, reason: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.freezeUser, { userId, reason });
+  freezeUser(id: string, reason: string): Observable<User> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.freezeUser, { id, reason }));
   }
 
   /**
    * Размораживает пользователя
-   * @param userId - ID пользователя
-   * @returns {Promise<User>} Обновленный пользователь
+   * @param data - ID пользователя
+   * @returns {Promise<void>}
    */
-  async unfreezeUser(userId: string) {
-    const service = this.getService<any>('UserService');
-    return this.callGrpcMethod(service.unfreezeUser, { userId });
+  unfreeze(data: { id: string }): Observable<void> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.unfreeze, data));
+  }
+
+  setOnline(data: { id: string; isOnline: boolean }): Observable<void> {
+    const service = this.getService<UserService>('UserService');
+    return from(this.callGrpcMethod(service.setOnline, data));
   }
 } 

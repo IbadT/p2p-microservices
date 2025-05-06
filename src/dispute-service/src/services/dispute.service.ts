@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { PrismaService } from 'src/prisma.service';
 import { NotificationType } from '../../../client/interfaces/enums';
+import { TransactionStatus, DisputeStatus } from '@prisma/client';
 
 @Injectable()
 export class DisputeService {
@@ -40,7 +41,7 @@ export class DisputeService {
           transactionId,
           initiatorId,
           reason,
-          status: 'OPEN',
+          status: DisputeStatus.OPEN,
         },
       });
 
@@ -48,7 +49,7 @@ export class DisputeService {
       await prisma.exchangeTransaction.update({
         where: { id: transactionId },
         data: {
-          status: 'DISPUTED',
+          status: TransactionStatus.DISPUTE_OPEN,
           disputeId: dispute.id,
         },
       });
@@ -90,7 +91,7 @@ export class DisputeService {
         throw new Error('Dispute not found');
       }
 
-      if (dispute.status !== 'OPEN') {
+      if (dispute.status !== DisputeStatus.OPEN) {
         throw new Error('Dispute already resolved');
       }
 
@@ -98,7 +99,7 @@ export class DisputeService {
       await prisma.dispute.update({
         where: { id: disputeId },
         data: {
-          status: 'RESOLVED',
+          status: DisputeStatus.RESOLVED,
           resolution,
           resolvedAt: new Date(),
           moderatorId,
@@ -109,7 +110,7 @@ export class DisputeService {
       await prisma.exchangeTransaction.update({
         where: { id: dispute.transactionId },
         data: {
-          status: winnerUserId === dispute.transaction.customerId ? 'COMPLETED' : 'CANCELLED',
+          status: winnerUserId === dispute.transaction.customerId ? TransactionStatus.FINISHED : TransactionStatus.CANCELLED,
         },
       });
 
@@ -142,7 +143,7 @@ export class DisputeService {
 
       await this.kafka.sendEvent({
         type: NotificationType.DISPUTE_STATUS_CHANGED,
-        payload: { disputeId, status: 'RESOLVED' }
+        payload: { disputeId, status: DisputeStatus.RESOLVED }
       });
 
       await this.kafka.sendEvent({
@@ -191,7 +192,7 @@ export class DisputeService {
   async getOpenDisputes() {
     return this.prisma.dispute.findMany({
       where: {
-        status: 'OPEN',
+        status: DisputeStatus.OPEN,
       },
       include: {
         transaction: {
@@ -219,19 +220,24 @@ export class DisputeService {
     moderatorId: string,
     comment: string
   ) {
-    await this.kafka.sendEvent({
-      type: NotificationType.DISPUTE_COMMENT_ADDED,
-      payload: { disputeId, commentId: null }
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        resolution: comment,
+        moderatorId,
+      },
     });
   }
 
   async changeDisputeStatus(
     disputeId: string,
-    newStatus: string
+    newStatus: DisputeStatus
   ) {
-    await this.kafka.sendEvent({
-      type: NotificationType.DISPUTE_STATUS_CHANGED,
-      payload: { disputeId, status: newStatus }
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        status: newStatus,
+      },
     });
   }
 
@@ -240,9 +246,14 @@ export class DisputeService {
     moderatorId: string,
     resolution: string
   ) {
-    await this.kafka.sendEvent({
-      type: NotificationType.DISPUTE_RESOLUTION_ADDED,
-      payload: { disputeId, resolution }
+    return this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        resolution,
+        moderatorId,
+        status: DisputeStatus.RESOLVED,
+        resolvedAt: new Date(),
+      },
     });
   }
 } 

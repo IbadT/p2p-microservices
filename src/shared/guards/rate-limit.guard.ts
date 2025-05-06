@@ -1,5 +1,5 @@
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import { Cache } from 'cache-manager';
+import { Injectable, ExecutionContext, UnauthorizedException, Inject } from '@nestjs/common';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Logger } from '@nestjs/common';
 import { CircuitBreaker } from '../utils/circuit-breaker.utils';
 import { ShutdownManager } from '../utils/shutdown.utils';
@@ -17,7 +17,7 @@ export class RateLimitGuard {
   private static readonly CLEANUP_INTERVAL = 60000; // 1 minute
   private static cleanupInterval: NodeJS.Timeout | undefined;
 
-  constructor(private readonly cacheManager: Cache) {
+  constructor(@Inject(CACHE_MANAGER) private readonly cacheManager: Cache) {
     this.startCleanupJob();
     ShutdownManager.registerCleanupTask(async () => {
       await this.stopCleanupJob();
@@ -85,9 +85,9 @@ export class RateLimitGuard {
     RateLimitGuard.cleanupInterval = setInterval(async () => {
       try {
         await RateLimitGuard.circuitBreaker.execute(async () => {
-          const keys = await this.cacheManager.store.keys?.('rate-limit:*');
-          if (keys?.length) {
-            await Promise.all(keys.map(key => this.cacheManager.del(key)));
+          const value = await this.cacheManager.get('rate-limit:*');
+          if (value) {
+            await this.cacheManager.del('rate-limit:*');
           }
         });
       } catch (error) {

@@ -3,31 +3,7 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { NOTIFICATIONS_SERVICE } from '../constants';
 import { Observable } from 'rxjs';
-
-export interface NotificationData {
-  title?: string;
-  message: string;
-  priority?: 'low' | 'medium' | 'high';
-  metadata?: Record<string, unknown>;
-}
-
-export interface Notification {
-  id: string;
-  userId: string;
-  type: string;
-  data: NotificationData;
-  isRead: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface NotificationsService {
-  sendNotification(request: { userId: string; type: string; data: NotificationData }): Observable<void>;
-  getUserNotifications(request: { userId: string }): Observable<Notification[]>;
-  markAsRead(request: { notificationId: string; userId: string }): Observable<void>;
-  markAllAsRead(request: { userId: string }): Observable<void>;
-  deleteNotification(request: { notificationId: string; userId: string }): Observable<void>;
-}
+import { NotificationsService, NotificationData, Notification } from '../interfaces/grpc.interfaces';
 
 @Injectable()
 export class NotificationsGrpcClient extends BaseGrpcClient {

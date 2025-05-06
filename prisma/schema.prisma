@@ -68,7 +68,7 @@ model ExchangeListing {
   minAmount       Float
   maxAmount       Float
   availableAmount Float
-  paymentMethods  String[]
+  paymentMethods  PaymentMethod[]
   terms           String?
   userId          String
   isActive        Boolean          @default(true)

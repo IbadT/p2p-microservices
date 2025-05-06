@@ -68,6 +68,7 @@ export enum NotificationType {
   EXCHANGER_STATUS_CHECKED = 'exchanger.status.checked',
   EXCHANGER_STATUS_FROZEN = 'exchanger.status.frozen',
   SCHEDULER_TASK_FAILED = 'scheduler.task.failed',
+  HEALTH_CHECK = 'system.health.check',
   
   // Security related
   SECURITY = 'SECURITY'

@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package offers;
+
+service OffersService {
+  rpc CreateOffer (CreateOfferRequest) returns (CreateOfferResponse);
+  rpc GetOffer (GetOfferRequest) returns (GetOfferResponse);
+  rpc ListOffers (ListOffersRequest) returns (ListOffersResponse);
+  rpc UpdateOffer (UpdateOfferRequest) returns (UpdateOfferResponse);
+  rpc DeleteOffer (DeleteOfferRequest) returns (DeleteOfferResponse);
+}
+
+message CreateOfferRequest {
+  string userId = 1;
+  string listingId = 2;
+  double amount = 3;
+  string currency = 4;
+  string message = 5;
+  map<string, string> metadata = 6;
+}
+
+message CreateOfferResponse {
+  bool success = 1;
+  string offerId = 2;
+}
+
+message GetOfferRequest {
+  string offerId = 1;
+}
+
+message GetOfferResponse {
+  Offer offer = 1;
+}
+
+message ListOffersRequest {
+  string userId = 1;
+  string listingId = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  string status = 5;
+}
+
+message ListOffersResponse {
+  repeated Offer offers = 1;
+  int32 total = 2;
+}
+
+message UpdateOfferRequest {
+  string offerId = 1;
+  double amount = 2;
+  string currency = 3;
+  string message = 4;
+  string status = 5;
+  map<string, string> metadata = 6;
+}
+
+message UpdateOfferResponse {
+  bool success = 1;
+}
+
+message DeleteOfferRequest {
+  string offerId = 1;
+}
+
+message DeleteOfferResponse {
+  bool success = 1;
+}
+
+message Offer {
+  string id = 1;
+  string userId = 2;
+  string listingId = 3;
+  double amount = 4;
+  string currency = 5;
+  string message = 6;
+  string status = 7;
+  string createdAt = 8;
+  string updatedAt = 9;
+  map<string, string> metadata = 10;
+} 

@@ -20,8 +20,7 @@ export class AuditController {
         action: data.action,
         entityType: data.entityType,
         entityId: data.entityId,
-        details: data.details,
-        ipAddress: data.ipAddress,
+        metadata: JSON.parse(data.details || '{}'),
       });
       return auditLog as unknown as AuditLog;
     } catch (error) {

@@ -1,12 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-store';
+import type { RedisClientOptions } from 'redis';
 import { UsersGatewayController } from './users.gateway.controller';
 import { ReviewsGatewayController } from './reviews.gateway.controller';
 import { DisputesGatewayController } from './disputes.gateway.controller';
 import { ExchangesGatewayController } from './exchanges.gateway.controller';
 import { ListingsGatewayController } from './listings.gateway.controller';
 import { OffersGatewayController } from './offers.gateway.controller';
+import { BalanceGatewayController } from './balance.gateway.controller';
+import { AuditGatewayController } from './audit.gateway.controller';
 import { UserGrpcClient } from './services/user.grpc.client';
 import { BalanceGrpcClient } from './services/balance.grpc.client';
 import { DisputeGrpcClient } from './services/dispute.grpc.client';
@@ -28,59 +33,57 @@ import {
   TRANSACTIONS_SERVICE,
   LISTINGS_SERVICE,
   OFFERS_SERVICE,
-  FILTERS_SERVICE,
-  TYPES_SERVICE,
-  KAFKA_SERVICE,
   AUTH_SERVICE,
 } from './constants';
 import { NotificationsGrpcClient } from './services/notifications.grpc.client';
 import { TransactionsGrpcClient } from './services/transactions.grpc.client';
 import { ListingsGrpcClient } from './services/listings.grpc.client';
 import { OffersGrpcClient } from './services/offers.grpc.client';
-import { FiltersGrpcClient } from './services/filters.grpc.client';
-import { TypesGrpcClient } from './services/types.grpc.client';
-import { KafkaGrpcClient } from './services/kafka.grpc.client';
 import { AuthGrpcClient } from './services/auth.grpc.client';
+import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
+import { UsersModule } from '../users/users.module';
+import { ReviewsModule } from '../reviews/reviews.module';
+import { DisputesModule } from '../disputes/disputes.module';
+import { ListingsModule } from '../listings/listings.module';
+import { OffersModule } from '../offers/offers.module';
+import { AuditModule } from '../audit/audit.module';
+import { SchedulerModule } from '../scheduler/scheduler.module';
+import { BalanceModule } from '../balance/balance.module';
+import { join } from 'path';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    CacheModule.registerAsync<RedisClientOptions>({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        store: redisStore as any,
+        socket: {
+          host: configService.get('REDIS_HOST', 'localhost'),
+          port: configService.get('REDIS_PORT', 6379),
+        },
+        ttl: 3600,
+      }),
+      inject: [ConfigService],
+    }),
+    UsersModule,
+    ReviewsModule,
+    DisputesModule,
+    ListingsModule,
+    OffersModule,
+    AuditModule,
+    SchedulerModule,
+    BalanceModule,
     ClientsModule.registerAsync([
-      {
-        name: USER_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'user',
-            protoPath: 'src/proto/user.proto',
-            url: configService.get('USER_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: BALANCE_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'balance',
-            protoPath: 'src/proto/balance.proto',
-            url: configService.get('BALANCE_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
       {
         name: DISPUTE_SERVICE,
         imports: [ConfigModule],
         useFactory: (configService: ConfigService) => ({
           transport: Transport.GRPC,
           options: {
-            package: 'dispute',
-            protoPath: 'src/proto/dispute.proto',
-            url: configService.get('DISPUTE_SERVICE_URL'),
+            package: 'user',
+            protoPath: 'src/proto/user.proto',
+            url: configService.get('DISPUTE_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
@@ -91,87 +94,9 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.GRPC,
           options: {
-            package: 'reviews',
-            protoPath: 'src/proto/reviews.proto',
-            url: configService.get('REVIEWS_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: EXCHANGE_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'exchange',
-            protoPath: 'src/proto/exchange.proto',
-            url: configService.get('EXCHANGE_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: P2P_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'p2p',
-            protoPath: 'src/proto/p2p.proto',
-            url: configService.get('P2P_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: AUDIT_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'audit',
-            protoPath: 'src/proto/audit.proto',
-            url: configService.get('AUDIT_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: SCHEDULER_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'scheduler',
-            protoPath: 'src/proto/scheduler.proto',
-            url: configService.get('SCHEDULER_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: NOTIFICATIONS_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'notifications',
-            protoPath: 'src/proto/notifications.proto',
-            url: configService.get('NOTIFICATIONS_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: TRANSACTIONS_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'transactions',
-            protoPath: 'src/proto/transactions.proto',
-            url: configService.get('TRANSACTIONS_SERVICE_URL'),
+            package: 'user',
+            protoPath: 'src/proto/user.proto',
+            url: configService.get('REVIEWS_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
@@ -184,7 +109,20 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
           options: {
             package: 'listings',
             protoPath: 'src/proto/listings.proto',
-            url: configService.get('LISTINGS_SERVICE_URL'),
+            url: configService.get('LISTINGS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'LISTING_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'listings',
+            protoPath: 'src/proto/listings.proto',
+            url: configService.get('LISTINGS_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
@@ -197,46 +135,20 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
           options: {
             package: 'offers',
             protoPath: 'src/proto/offers.proto',
-            url: configService.get('OFFERS_SERVICE_URL'),
+            url: configService.get('OFFERS_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
       },
       {
-        name: FILTERS_SERVICE,
+        name: 'OFFER_PACKAGE',
         imports: [ConfigModule],
         useFactory: (configService: ConfigService) => ({
           transport: Transport.GRPC,
           options: {
-            package: 'filters',
-            protoPath: 'src/proto/filters.proto',
-            url: configService.get('FILTERS_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: TYPES_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'types',
-            protoPath: 'src/proto/types.proto',
-            url: configService.get('TYPES_SERVICE_URL'),
-          },
-        }),
-        inject: [ConfigService],
-      },
-      {
-        name: KAFKA_SERVICE,
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.GRPC,
-          options: {
-            package: 'kafka',
-            protoPath: 'src/proto/kafka.proto',
-            url: configService.get('KAFKA_SERVICE_URL'),
+            package: 'offers',
+            protoPath: 'src/proto/offers.proto',
+            url: configService.get('OFFERS_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
@@ -249,7 +161,280 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
           options: {
             package: 'auth',
             protoPath: 'src/proto/auth.proto',
-            url: configService.get('AUTH_SERVICE_URL'),
+            url: configService.get('AUTH_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'AUTH_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'auth',
+            protoPath: 'src/proto/auth.proto',
+            url: configService.get('AUTH_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: USER_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'user',
+            protoPath: 'src/proto/user.proto',
+            url: configService.get('USER_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'USER_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'user',
+            protoPath: 'src/proto/user.proto',
+            url: configService.get('USER_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: BALANCE_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'balance',
+            protoPath: 'src/proto/balance.proto',
+            url: configService.get('BALANCE_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'BALANCE_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'balance',
+            protoPath: 'src/proto/balance.proto',
+            url: configService.get('BALANCE_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: EXCHANGE_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'exchange',
+            protoPath: 'src/proto/exchange.proto',
+            url: configService.get('EXCHANGE_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'EXCHANGE_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'exchange',
+            protoPath: 'src/proto/exchange.proto',
+            url: configService.get('EXCHANGE_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: P2P_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'p2p',
+            protoPath: 'src/proto/p2p.proto',
+            url: configService.get('P2P_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'P2P_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'p2p',
+            protoPath: 'src/proto/p2p.proto',
+            url: configService.get('P2P_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: AUDIT_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'audit',
+            protoPath: 'src/proto/audit.proto',
+            url: configService.get('AUDIT_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'AUDIT_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'audit',
+            protoPath: 'src/proto/audit.proto',
+            url: configService.get('AUDIT_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: SCHEDULER_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'scheduler',
+            protoPath: 'src/proto/scheduler.proto',
+            url: configService.get('SCHEDULER_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'SCHEDULER_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'scheduler',
+            protoPath: 'src/proto/scheduler.proto',
+            url: configService.get('SCHEDULER_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: NOTIFICATIONS_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'notifications',
+            protoPath: 'src/proto/notifications.proto',
+            url: configService.get('NOTIFICATIONS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'NOTIFICATIONS_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'notifications',
+            protoPath: 'src/proto/notifications.proto',
+            url: configService.get('NOTIFICATIONS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: TRANSACTIONS_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'transactions',
+            protoPath: 'src/proto/transactions.proto',
+            url: configService.get('TRANSACTIONS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'TRANSACTIONS_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'transactions',
+            protoPath: 'src/proto/transactions.proto',
+            url: configService.get('TRANSACTIONS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: REVIEWS_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'reviews',
+            protoPath: 'src/proto/reviews.proto',
+            url: configService.get('REVIEWS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'REVIEWS_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'reviews',
+            protoPath: 'src/proto/reviews.proto',
+            url: configService.get('REVIEWS_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: DISPUTE_SERVICE,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'disputes',
+            protoPath: 'src/proto/disputes.proto',
+            url: configService.get('DISPUTE_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'DISPUTE_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'disputes',
+            protoPath: 'src/proto/disputes.proto',
+            url: configService.get('DISPUTE_SERVICE_URL', 'localhost:5000'),
           },
         }),
         inject: [ConfigService],
@@ -262,9 +447,12 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
     DisputesGatewayController,
     ExchangesGatewayController,
     ListingsGatewayController,
-    OffersGatewayController
+    OffersGatewayController,
+    BalanceGatewayController,
+    AuditGatewayController
   ],
   providers: [
+    RateLimitGuard,
     UserGrpcClient,
     BalanceGrpcClient,
     DisputeGrpcClient,
@@ -277,9 +465,6 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
     TransactionsGrpcClient,
     ListingsGrpcClient,
     OffersGrpcClient,
-    FiltersGrpcClient,
-    TypesGrpcClient,
-    KafkaGrpcClient,
     AuthGrpcClient,
   ],
   exports: [
@@ -295,9 +480,6 @@ import { AuthGrpcClient } from './services/auth.grpc.client';
     TransactionsGrpcClient,
     ListingsGrpcClient,
     OffersGrpcClient,
-    FiltersGrpcClient,
-    TypesGrpcClient,
-    KafkaGrpcClient,
     AuthGrpcClient,
   ],
 })

@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-// import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaService } from '../kafka/kafka.service';
 import { Prisma, TransactionStatus, DisputeStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 import { NotificationType } from '../client/interfaces/enums';
+import { DatabaseUtils } from '../shared/utils/database.utils';
 
 @Injectable()
 export class DisputesService {
@@ -119,7 +119,7 @@ export class DisputesService {
       throw new Error('Dispute not found');
     }
 
-    if (dispute.status !== 'OPEN') {
+    if (dispute.status !== DisputeStatus.OPEN) {
       throw new Error('Dispute is not open');
     }
 
@@ -211,7 +211,7 @@ export class DisputesService {
       data: {
         resolution: comment || resolution || undefined,
         moderatorId,
-        status: resolution ? 'RESOLVED' : undefined,
+        status: resolution ? DisputeStatus.RESOLVED : undefined,
         resolvedAt: resolution ? new Date() : undefined,
       },
     });

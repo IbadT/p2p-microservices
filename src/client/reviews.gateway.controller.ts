@@ -1,44 +1,50 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Controller, Post, Body, UseGuards, Get, Param, OnModuleInit, Inject } from '@nestjs/common';
+import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
+import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CreateReviewDto } from '../reviews/dto/create-review.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiCreateReview,
+  ApiGetAllReviews,
+  ApiGetReviewsByUser,
+  ApiGetReviewById
+} from './swagger/client.swagger';
+import { BaseGrpcClient } from './base/base.grpc.client';
+import { ClientGrpc } from '@nestjs/microservices';
 
-@ApiTags('reviews')
+@ApiTags('Reviews')
 @Controller('reviews')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
 @ApiBearerAuth()
-export class ReviewsGatewayController {
-  constructor(private readonly reviewsService: ReviewsService) {}
+export class ReviewsGatewayController extends BaseGrpcClient implements OnModuleInit {
+  constructor(
+    @Inject('REVIEWS_PACKAGE') protected readonly client: ClientGrpc,
+    private readonly reviewsService: ReviewsService
+  ) {
+    super(client, 'ReviewsService');
+  }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new review' })
-  @ApiResponse({ status: 201, description: 'The review has been successfully created.' })
-  @ApiResponse({ status: 400, description: 'Bad request.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiCreateReview()
   async create(@Body() createReviewDto: CreateReviewDto) {
     return this.reviewsService.createReview(createReviewDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all reviews' })
-  @ApiResponse({ status: 200, description: 'Return all reviews.' })
+  @ApiGetAllReviews()
   async findAll() {
     return this.reviewsService.findAll();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a review by id' })
-  @ApiResponse({ status: 200, description: 'Return the review.' })
-  @ApiResponse({ status: 404, description: 'Review not found.' })
+  @ApiGetReviewById()
   async findOne(@Param('id') id: string) {
     return this.reviewsService.getReview(id);
   }
 
   @Get('user/:userId')
-  @ApiOperation({ summary: 'Get all reviews for a user' })
-  @ApiResponse({ status: 200, description: 'Return all reviews for the user.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiGetReviewsByUser()
   async findByUser(@Param('userId') userId: string) {
     return this.reviewsService.getReviewsByUserId(userId);
   }

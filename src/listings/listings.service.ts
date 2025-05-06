@@ -152,10 +152,9 @@ export class ListingsService {
       await this.auditService.createAuditLog({
         userId: listing.userId,
         action: 'DEACTIVATE_LISTING',
-        entityType: 'ExchangeListing',
+        entityType: 'Listing',
         entityId: listing.id,
-        details: JSON.stringify({ reason: 'TTL' }),
-        ipAddress: '',
+        metadata: { reason: 'TTL' }
       });
     }
   }

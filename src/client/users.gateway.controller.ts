@@ -1,16 +1,28 @@
-import { Controller, Post, Body, UseGuards, Req, Logger, Get, BadRequestException, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Logger, Get, BadRequestException, Param, Put } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 import { UserGrpcClient } from './services/user.grpc.client';
 import { CreateUserDto, UpdateUserDto } from './interfaces/client.swagger';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { User } from './interfaces/grpc.interfaces';
 import { SecurityManager } from '../shared/utils/security.utils';
 import { QueueManager } from '../shared/utils/queue.utils';
 import { AuthenticatedRequest } from '../shared/interfaces/request.interface';
 import { UsersService } from '../users/users.service';
 import { userSchema } from '../shared/schemas/user.schema';
+import { firstValueFrom } from 'rxjs';
+import {
+  ApiCreateUser,
+  ApiUpdateUser,
+  ApiGetUserProfile,
+  ApiSetOnline,
+  ApiUnfreeze,
+  ApiGetAllUsers,
+  ApiGetUserById,
+  ApiActivateExchanger,
+  ApiDeactivateExchanger
+} from './swagger/client.swagger';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -22,14 +34,10 @@ export class UsersGatewayController {
   constructor(private readonly userClient: UserGrpcClient, private readonly usersService: UsersService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new user' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiCreateUser()
   async createUser(@Body() dto: CreateUserDto): Promise<User> {
     try {
-      const result = await this.userClient.createUser(dto);
-      return result as User;
+      return await firstValueFrom(this.userClient.createUser(dto));
     } catch (error) {
       this.logger.error(`Failed to create user: ${error.message}`, error.stack);
       throw error;
@@ -38,16 +46,10 @@ export class UsersGatewayController {
 
   @Post(':id')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Update user by ID' })
-  @ApiResponse({ status: 200, description: 'User updated successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiUpdateUser()
   async updateUser(@Body() dto: UpdateUserDto): Promise<User> {
     try {
-      const result = await this.userClient.updateUser(dto);
-      return result as User;
+      return await firstValueFrom(this.userClient.updateUser(dto));
     } catch (error) {
       this.logger.error(`Failed to update user: ${error.message}`, error.stack);
       throw error;
@@ -55,10 +57,7 @@ export class UsersGatewayController {
   }
 
   @Get('profile')
-  @ApiOperation({ summary: 'Get user profile' })
-  @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiGetUserProfile()
   async getProfile(@Req() req: AuthenticatedRequest): Promise<User> {
     if (!req.ip) {
       throw new BadRequestException('IP address is required');
@@ -66,85 +65,51 @@ export class UsersGatewayController {
     
     await SecurityManager.checkRateLimit(req.ip, 'getProfile');
     const result = await QueueManager.addToQueue('user', async () => {
-      return this.userClient.getUser(req.user.id);
+      return firstValueFrom(this.userClient.getUser(req.user.id));
     });
-    return result as User;
+    return result;
   }
 
   @Post('online')
-  @ApiOperation({ summary: 'Set user online status' })
-  @ApiResponse({ status: 200, description: 'Online status updated successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
-  async setOnline(@Req() req: AuthenticatedRequest, @Body('isOnline') isOnline: boolean): Promise<void> {
-    if (!req.ip) {
-      throw new BadRequestException('IP address is required');
-    }
-
-    if (!SecurityManager.validateInput({ isOnline }, userSchema.isOnline)) {
-      throw new BadRequestException('Invalid input');
-    }
-
-    await SecurityManager.checkRateLimit(req.ip, 'setOnline');
-    const result = await QueueManager.addToQueue('user', async () => {
-      return this.userClient.setOnline(req.user.id, isOnline);
-    });
-    return result as void;
+  @ApiSetOnline()
+  async setOnline(@Req() req: any, @Body('isOnline') isOnline: boolean): Promise<void> {
+    return firstValueFrom(this.userClient.setOnline({ id: req.user.id, isOnline }));
   }
 
   @Post('unfreeze')
-  @ApiOperation({ summary: 'Unfreeze user account' })
-  @ApiResponse({ status: 200, description: 'Account unfrozen successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
-  async unfreeze(@Req() req: AuthenticatedRequest): Promise<void> {
-    if (!req.ip) {
-      throw new BadRequestException('IP address is required');
-    }
-
-    await SecurityManager.checkRateLimit(req.ip, 'unfreeze');
-    const result = await QueueManager.addToQueue('user', async () => {
-      return this.userClient.unfreeze(req.user.id);
-    });
-    return result as void;
+  @ApiUnfreeze()
+  async unfreeze(@Req() req: any): Promise<void> {
+    return firstValueFrom(this.userClient.unfreeze({ id: req.user.id }));
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiResponse({ status: 200, description: 'Return all users.' })
+  @ApiGetAllUsers()
   async findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a user by id' })
-  @ApiResponse({ status: 200, description: 'Return the user.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiGetUserById()
   async findOne(@Param('id') id: string) {
     return this.usersService.getUserById(id);
   }
 
-  @Post(':id/update')
-  @ApiOperation({ summary: 'Update a user' })
-  @ApiResponse({ status: 200, description: 'The user has been successfully updated.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.updateUser(id, updateUserDto);
+  @Put(':id')
+  @ApiUpdateUser()
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto): Promise<User> {
+    const { email, password, role } = updateUserDto;
+    return this.usersService.updateUser({ userId: id, email, password, role });
   }
 
-  @Post(':id/activate')
-  @ApiOperation({ summary: 'Activate a user' })
-  @ApiResponse({ status: 200, description: 'The user has been successfully activated.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
-  async activate(@Param('id') id: string) {
-    return this.usersService.updateUser(id, { isExchangerActive: true });
+  @Put(':id/activate')
+  @ApiActivateExchanger()
+  async activateExchanger(@Param('id') id: string): Promise<User> {
+    return this.usersService.setExchangerStatus({ exchangerId: id, online: true });
   }
 
-  @Post(':id/deactivate')
-  @ApiOperation({ summary: 'Deactivate a user' })
-  @ApiResponse({ status: 200, description: 'The user has been successfully deactivated.' })
-  @ApiResponse({ status: 404, description: 'User not found.' })
-  async deactivate(@Param('id') id: string) {
-    return this.usersService.updateUser(id, { isExchangerActive: false });
+  @Put(':id/deactivate')
+  @ApiDeactivateExchanger()
+  async deactivateExchanger(@Param('id') id: string): Promise<User> {
+    return this.usersService.setExchangerStatus({ exchangerId: id, online: false });
   }
 } 

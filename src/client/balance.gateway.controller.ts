@@ -11,7 +11,7 @@ import { GetBalanceDto, CreateHoldDto } from './interfaces/client.swagger';
 import { ApiGetBalance, ApiCreateHold } from './swagger/client.swagger';
 
 @ApiTags('Balance')
-@Controller('api/balance')
+@Controller('balance')
 export class BalanceGatewayController {
   constructor(private readonly balanceClient: BalanceGrpcClient) {}
 

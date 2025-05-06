@@ -5,6 +5,7 @@ import { UsersService } from './users.service';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { KafkaService } from 'src/kafka/kafka.service';
         },
       },
     ]),
+    NotificationsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, PrismaService, KafkaService],

@@ -1,15 +1,21 @@
 import { Module } from '@nestjs/common';
-import { DisputeController } from './controllers/dispute.controller';
-import { DisputeService } from './services/dispute.service';
-import { KafkaService } from 'src/kafka/kafka.service';
-import { PrismaService } from 'src/prisma.service';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { RedisClientOptions } from 'redis';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1h' },
+      }),
+      inject: [ConfigService],
+    }),
     CacheModule.registerAsync<RedisClientOptions>({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -23,8 +29,7 @@ import type { RedisClientOptions } from 'redis';
       inject: [ConfigService],
     }),
   ],
-  controllers: [DisputeController],
-  providers: [DisputeService, PrismaService, KafkaService],
-  exports: [DisputeService],
+  providers: [JwtAuthGuard],
+  exports: [JwtAuthGuard],
 })
-export class DisputeModule {} 
+export class AuthModule {} 

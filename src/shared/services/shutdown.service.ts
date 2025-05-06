@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
-import { DatabaseManager } from '../utils/database.utils';
+import { DatabaseUtils } from '../utils/database.utils';
 import { MetricsCollector } from '../utils/metrics.utils';
 import { QueueManager } from '../utils/queue.utils';
 
@@ -13,7 +13,7 @@ export class ShutdownService implements OnModuleDestroy {
 
     try {
       // Закрываем все пулы соединений с БД
-      await DatabaseManager.closeAll();
+      await DatabaseUtils.closeAll();
       this.logger.log('Database connections closed');
 
       // Сохраняем метрики

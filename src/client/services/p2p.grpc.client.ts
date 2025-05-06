@@ -3,16 +3,25 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { P2P_SERVICE } from '../constants';
 import { CreateExchangeOfferDto, RespondExchangeOfferDto } from '../interfaces/client.swagger';
-import { CreateOfferDto, RespondToOfferDto } from '../interfaces/offer.dto';
 import { 
-  Offer, 
-  ExchangeOffer, 
-  P2PStats, 
-  ExchangeRates, 
-  ExchangeLimits, 
-  ExchangeFees, 
-  P2PSettings,
-  P2PService as IP2PService
+  ExchangeOffer,
+  P2PService as IP2PService,
+  ConfirmPaymentRequest,
+  ConfirmPaymentResponse,
+  ConfirmReceiptRequest,
+  ConfirmReceiptResponse,
+  OpenDisputeRequest,
+  OpenDisputeResponse,
+  TransactionStatusRequest,
+  TransactionStatusResponse,
+  SetExchangerStatusRequest,
+  SetExchangerStatusResponse,
+  CancelTransactionRequest,
+  CancelTransactionResponse,
+  ResolveDisputeRequest,
+  ResolveDisputeResponse,
+  FreezeExchangerRequest,
+  FreezeExchangerResponse
 } from '../interfaces/grpc.interfaces';
 
 @Injectable()
@@ -20,7 +29,7 @@ export class P2PGrpcClient extends BaseGrpcClient {
   constructor(
     @Inject(P2P_SERVICE) client: ClientGrpc,
   ) {
-    super(client, 'P2PService');
+    super(client, 'P2PExchangeService');
   }
 
   /**
@@ -29,7 +38,7 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @returns {Promise<ExchangeOffer>} Созданное предложение
    */
   async createExchangeOffer(dto: CreateExchangeOfferDto): Promise<ExchangeOffer> {
-    const service = this.getService<IP2PService>('P2PService');
+    const service = this.getService<IP2PService>('P2PExchangeService');
     return this.callGrpcMethod(service.createExchangeOffer, dto);
   }
 
@@ -39,8 +48,88 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @returns {Promise<ExchangeOffer>} Обновленное предложение
    */
   async respondExchangeOffer(dto: RespondExchangeOfferDto): Promise<ExchangeOffer> {
-    const service = this.getService<IP2PService>('P2PService');
+    const service = this.getService<IP2PService>('P2PExchangeService');
     return this.callGrpcMethod(service.respondExchangeOffer, dto);
+  }
+
+  /**
+   * Подтверждает платеж
+   * @param request - Данные для подтверждения платежа
+   * @returns {Promise<ConfirmPaymentResponse>} Результат подтверждения
+   */
+  async confirmPayment(request: ConfirmPaymentRequest): Promise<ConfirmPaymentResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.confirmPayment, request);
+  }
+
+  /**
+   * Подтверждает получение
+   * @param request - Данные для подтверждения получения
+   * @returns {Promise<ConfirmReceiptResponse>} Результат подтверждения
+   */
+  async confirmReceipt(request: ConfirmReceiptRequest): Promise<ConfirmReceiptResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.confirmReceipt, request);
+  }
+
+  /**
+   * Открывает спор
+   * @param request - Данные для открытия спора
+   * @returns {Promise<OpenDisputeResponse>} Результат открытия спора
+   */
+  async openDispute(request: OpenDisputeRequest): Promise<OpenDisputeResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.openDispute, request);
+  }
+
+  /**
+   * Получает статус транзакции
+   * @param request - Данные для получения статуса
+   * @returns {Promise<TransactionStatusResponse>} Статус транзакции
+   */
+  async getTransactionStatus(request: TransactionStatusRequest): Promise<TransactionStatusResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.getTransactionStatus, request);
+  }
+
+  /**
+   * Устанавливает статус обменника
+   * @param request - Данные для установки статуса
+   * @returns {Promise<SetExchangerStatusResponse>} Результат установки статуса
+   */
+  async setExchangerStatus(request: SetExchangerStatusRequest): Promise<SetExchangerStatusResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.setExchangerStatus, request);
+  }
+
+  /**
+   * Отменяет транзакцию
+   * @param request - Данные для отмены транзакции
+   * @returns {Promise<CancelTransactionResponse>} Результат отмены
+   */
+  async cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.cancelTransaction, request);
+  }
+
+  /**
+   * Разрешает спор
+   * @param request - Данные для разрешения спора
+   * @returns {Promise<ResolveDisputeResponse>} Результат разрешения
+   */
+  async resolveDispute(request: ResolveDisputeRequest): Promise<ResolveDisputeResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.resolveDispute, request);
+  }
+
+  /**
+   * Замораживает обменника
+   * @param request - Данные для заморозки
+   * @returns {Promise<FreezeExchangerResponse>} Результат заморозки
+   */
+  async freezeExchanger(request: FreezeExchangerRequest): Promise<FreezeExchangerResponse> {
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    return this.callGrpcMethod(service.freezeExchanger, request);
   }
 
   /**
@@ -49,72 +138,16 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @returns {Promise<ExchangeOffer>} Предложение
    */
   async getOffer(id: string): Promise<ExchangeOffer> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getOffer, { id });
-  }
-
-  async createOffer(dto: CreateOfferDto): Promise<Offer> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.createOffer, dto);
-  }
-
-  async respondToOffer(dto: RespondToOfferDto): Promise<Offer> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.respondToOffer, dto);
-  }
-
-  /**
-   * Получает статистику P2P
-   * @returns {Promise<P2PStats>} Статистика P2P
-   */
-  async getStats(): Promise<P2PStats> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getStats);
-  }
-
-  /**
-   * Получает курсы валют
-   * @returns {Promise<ExchangeRates>} Курсы валют
-   */
-  async getExchangeRates(): Promise<ExchangeRates> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getExchangeRates);
-  }
-
-  /**
-   * Получает лимиты для обмена
-   * @returns {Promise<ExchangeLimits>} Лимиты для обмена
-   */
-  async getExchangeLimits(): Promise<ExchangeLimits> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getExchangeLimits);
-  }
-
-  /**
-   * Получает комиссии для обмена
-   * @returns {Promise<ExchangeFees>} Комиссии для обмена
-   */
-  async getExchangeFees(): Promise<ExchangeFees> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getExchangeFees);
-  }
-
-  /**
-   * Получает настройки P2P
-   * @returns {Promise<P2PSettings>} Настройки P2P
-   */
-  async getSettings(): Promise<P2PSettings> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.getSettings);
-  }
-
-  /**
-   * Обновляет настройки P2P
-   * @param settings - Новые настройки
-   * @returns {Promise<P2PSettings>} Обновленные настройки
-   */
-  async updateSettings(settings: Partial<P2PSettings>): Promise<P2PSettings> {
-    const service = this.getService<IP2PService>('P2PService');
-    return this.callGrpcMethod(service.updateSettings, settings);
+    const service = this.getService<IP2PService>('P2PExchangeService');
+    const status = await this.callGrpcMethod(service.getTransactionStatus, { offerId: id });
+    return {
+      id: status.offerId,
+      customerId: '',
+      listingId: '',
+      amount: 0,
+      exchangeType: '',
+      conditions: '',
+      status: status.status
+    };
   }
 } 

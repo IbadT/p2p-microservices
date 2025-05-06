@@ -40,11 +40,12 @@ async function bootstrap() {
   const KAFKA_BROKER = configService.get<string>('KAFKA_BROKER');
   const SENTRY_DNS = configService.get<string>('SENTRY_DNS');
 
+  app.setGlobalPrefix('api');
+
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('P2P documentation')
-    .addTag('p2p')
-    .setDescription('P2P Api Documentation')
-    .setVersion('1.0.0')
+    .setTitle('P2P Exchange Platform API')
+    .setDescription('API documentation for the P2P Exchange Platform')
+    .setVersion('1.0')
     .addBearerAuth(
       {
         type: 'http',
@@ -55,25 +56,37 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
-    .setTitle('P2P Exchange Platform API')
-    .setDescription('API documentation for the P2P Exchange Platform')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('listings', 'Exchange listings management')
-    .addTag('offers', 'Exchange offers management')
-    .addTag('transactions', 'Exchange transactions management')
-    .addTag('disputes', 'Dispute resolution')
-    .addTag('users', 'User management')
-    .addTag('balance', 'Balance operations')
-    .addTag('reviews', 'User reviews')
+    // .addTag('Auth', 'Authentication endpoints')
+    // .addTag('Listings', 'Exchange listings management')
+    // .addTag('Offers', 'Exchange offers management')
+    // .addTag('transactions', 'Exchange transactions management')
+    // .addTag('disputes', 'Dispute resolution')
+    // .addTag('users', 'User management')
+    // .addTag('balance', 'Balance operations')
+    // .addTag('reviews', 'User reviews')
+    // .addTag('exchanges', 'Exchange operations')
+    // .addTag('audit', 'Audit logs')
+    // .addTag('scheduler', 'Scheduled tasks')
+    // .addTag('notifications', 'Notification management')
     .build();
 
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  if (NODE_ENV !== 'production') {
-    // Swagger будет доступен по /api/docs
-    SwaggerModule.setup('api', app, swaggerDocument);
-  }
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
+    deepScanRoutes: true,
+    // ignoreGlobalPrefix: true,
+  });
+
+  // Enable Swagger in all environments
+  SwaggerModule.setup('api', app, swaggerDocument, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      showRequestDuration: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+    customSiteTitle: 'P2P Exchange Platform API Documentation',
+  });
 
   // Инициализация Sentry
   initSentry(SENTRY_DNS);
@@ -91,13 +104,14 @@ async function bootstrap() {
     },
   });
 
+  
   await app.startAllMicroservices();
   await app.listen(PORT ?? 4200);
 
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`Environment: ${NODE_ENV}`);
   logger.log(
-    `Swagger documentation is available at: ${await app.getUrl()}/api`,
+    `Swagger documentation is available at: ${await app.getUrl()}/docs`,
   );
 
   if (module.hot) {

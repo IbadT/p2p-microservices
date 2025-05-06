@@ -2,10 +2,16 @@ import { Controller, Get, Post, Patch, Param, Body, Query, Inject, OnModuleInit,
 import { ClientGrpc } from '@nestjs/microservices';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../shared/guards/roles.guard';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ExchangeGrpcClient } from './services/exchange.grpc.client';
 import { CreateListingDto, OpenDisputeDto } from './interfaces/client.swagger';
-import { ApiCreateListing, ApiOpenDispute } from './swagger/client.swagger';
+import { 
+  ApiCreateListing, 
+  ApiOpenDispute, 
+  ApiGetActiveExchanges,
+  ApiConfirmExchangeStep,
+  ApiGetExchangeById
+} from './swagger/client.swagger';
 import { SecurityManager } from '../shared/utils/security.utils';
 import { QueueManager } from '../shared/utils/queue.utils';
 import { AuthenticatedRequest } from '../shared/interfaces/request.interface';
@@ -13,6 +19,7 @@ import { disputeSchema } from '../shared/schemas/dispute.schema';
 import { Dispute, Exchange, ExchangeService, Listing } from './interfaces/grpc.interfaces';
 import { BaseGrpcClient } from './base/base.grpc.client';
 import { ExchangeType } from '@prisma/client';
+import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 
 interface ExchangeFilters {
   userId?: string;
@@ -22,7 +29,8 @@ interface ExchangeFilters {
 
 @ApiTags('Exchanges')
 @Controller('exchanges')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
+@ApiBearerAuth()
 export class ExchangesGatewayController extends BaseGrpcClient implements OnModuleInit {
   private exchangeService: ExchangeService;
 
@@ -38,8 +46,7 @@ export class ExchangesGatewayController extends BaseGrpcClient implements OnModu
   }
 
   @Get('active')
-  @ApiOperation({ summary: 'Get active exchanges' })
-  @ApiResponse({ status: 200, description: 'Return active exchanges' })
+  @ApiGetActiveExchanges()
   async getActive(@Query() query: ExchangeFilters): Promise<Exchange[]> {
     return this.callGrpcMethod<Exchange[]>(this.exchangeService.ListActiveExchanges, query);
   }
@@ -47,8 +54,7 @@ export class ExchangesGatewayController extends BaseGrpcClient implements OnModu
   @Post(':id/confirm')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SetMetadata('roles', ['Customer', 'Exchanger'])
-  @ApiOperation({ summary: 'Confirm exchange step' })
-  @ApiResponse({ status: 200, description: 'Step confirmed successfully' })
+  @ApiConfirmExchangeStep()
   async confirm(
     @Param('id') id: string,
     @Body() dto: { step: 'PAYMENT' | 'RECEIPT'; evidence?: string }
@@ -60,10 +66,6 @@ export class ExchangesGatewayController extends BaseGrpcClient implements OnModu
   @ApiOpenDispute()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SetMetadata('roles', ['Customer', 'Exchanger'])
-  @ApiOperation({ summary: 'Open a dispute' })
-  @ApiResponse({ status: 201, description: 'Dispute opened successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
   async openDispute(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -87,17 +89,12 @@ export class ExchangesGatewayController extends BaseGrpcClient implements OnModu
 
   @Post('listings')
   @ApiCreateListing()
-  @ApiOperation({ summary: 'Create a listing' })
-  @ApiResponse({ status: 201, description: 'Listing created successfully' })
   async createListing(@Body() dto: CreateListingDto): Promise<Listing> {
     return this.callGrpcMethod<Listing>(this.exchangeService.CreateListing, dto);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get exchange by ID' })
-  @ApiResponse({ status: 200, description: 'Exchange retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Exchange not found' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiGetExchangeById()
   async getExchange(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string

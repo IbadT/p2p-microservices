@@ -6,15 +6,21 @@ import { CreateReviewDto } from './client.swagger';
 import { GetBalanceDto, CreateHoldDto } from './client.swagger';
 import { CreateOfferDto, RespondToOfferDto } from './offer.dto';
 import { Observable } from 'rxjs';
-import { ExchangeType, PaymentMethod } from '@prisma/client';
+import type { ExchangeType, PaymentMethod, UserRole, Dispute as PrismaDispute, ExchangeTransaction, User as PrismaUser } from '@prisma/client';
 
 export interface User {
   id: string;
   email: string;
-  name: string;
-  phone?: string;
-  isOnline: boolean;
+  password: string;
+  role: UserRole;
+  isExchangerActive: boolean;
   isFrozen: boolean;
+  frozenUntil: Date | null;
+  missedOffersCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  name?: string;
+  isOnline?: boolean;
 }
 
 export interface Offer {
@@ -59,7 +65,7 @@ export interface Listing {
   minAmount: number;
   maxAmount: number;
   availableAmount: number;
-  paymentMethods: PaymentMethod[];
+  paymentMethods: string[];
   terms?: string | null;
   isActive: boolean;
   createdAt: Date;
@@ -98,27 +104,124 @@ export interface Hold {
   relatedTransactionId?: string;
 }
 
-export interface UserService {
-  createUser(dto: CreateUserDto): Promise<User>;
-  updateUser(dto: UpdateUserDto): Promise<User>;
-  getUser(id: string): Promise<User>;
-  getProfile(userId: string): Promise<User>;
-  setOnline(userId: string, isOnline: boolean): Promise<void>;
-  unfreeze(userId: string): Promise<void>;
+export interface UserService extends GrpcService {
+  createUser: GrpcMethod<CreateUserDto, User>;
+  updateUser: GrpcMethod<UpdateUserDto, User>;
+  getUser: GrpcMethod<{ id: string }, User>;
+  getUserByEmail: GrpcMethod<{ email: string }, User>;
+  getUsers: GrpcMethod<{ role?: string; isExchangerActive?: boolean }, User[]>;
+  activateExchanger: GrpcMethod<{ id: string }, User>;
+  deactivateExchanger: GrpcMethod<{ id: string }, User>;
+  freezeUser: GrpcMethod<{ id: string; reason: string }, User>;
+  unfreezeUser: GrpcMethod<{ id: string }, User>;
+  setOnline: GrpcMethod<{ id: string; isOnline: boolean }, void>;
+  unfreeze: GrpcMethod<{ id: string }, void>;
 }
 
-export interface P2PService {
-  createExchangeOffer(dto: CreateExchangeOfferDto): Promise<ExchangeOffer>;
-  respondExchangeOffer(dto: RespondExchangeOfferDto): Promise<ExchangeOffer>;
-  getOffer(id: string): Promise<ExchangeOffer>;
-  createOffer(dto: CreateOfferDto): Promise<Offer>;
-  respondToOffer(dto: RespondToOfferDto): Promise<Offer>;
-  getStats(): Promise<P2PStats>;
-  getExchangeRates(): Promise<ExchangeRates>;
-  getExchangeLimits(): Promise<ExchangeLimits>;
-  getExchangeFees(): Promise<ExchangeFees>;
-  getSettings(): Promise<P2PSettings>;
-  updateSettings(settings: Partial<P2PSettings>): Promise<P2PSettings>;
+export interface ConfirmPaymentRequest {
+  offerId: string;
+  exchangerId: string;
+  paymentReference: string;
+}
+
+export interface ConfirmPaymentResponse {
+  offerId: string;
+  status: string;
+  message: string;
+}
+
+export interface ConfirmReceiptRequest {
+  offerId: string;
+  customerId: string;
+}
+
+export interface ConfirmReceiptResponse {
+  offerId: string;
+  status: string;
+  message: string;
+}
+
+export interface OpenDisputeRequest {
+  offerId: string;
+  openedBy: string;
+  reason: string;
+}
+
+export interface OpenDisputeResponse {
+  disputeId: string;
+  status: string;
+  message: string;
+}
+
+export interface TransactionStatusRequest {
+  offerId: string;
+}
+
+export interface TransactionStatusResponse {
+  offerId: string;
+  status: string;
+  details: string;
+}
+
+export interface SetExchangerStatusRequest {
+  exchangerId: string;
+  online: boolean;
+}
+
+export interface SetExchangerStatusResponse {
+  exchangerId: string;
+  online: boolean;
+  message: string;
+}
+
+export interface CancelTransactionRequest {
+  offerId: string;
+  cancelledBy: string;
+  reason: string;
+}
+
+export interface CancelTransactionResponse {
+  offerId: string;
+  status: string;
+  message: string;
+}
+
+export interface ResolveDisputeRequest {
+  disputeId: string;
+  adminId: string;
+  resolution: string;
+  winnerUserId: string;
+}
+
+export interface ResolveDisputeResponse {
+  disputeId: string;
+  status: string;
+  message: string;
+}
+
+export interface FreezeExchangerRequest {
+  exchangerId: string;
+  reason: string;
+}
+
+export interface FreezeExchangerResponse {
+  exchangerId: string;
+  isFrozen: boolean;
+  message: string;
+}
+
+export interface P2PService extends GrpcService {
+  createExchangeOffer: GrpcMethod<CreateExchangeOfferDto, ExchangeOffer>;
+  respondExchangeOffer: GrpcMethod<RespondExchangeOfferDto, ExchangeOffer>;
+  confirmPayment: GrpcMethod<ConfirmPaymentRequest, ConfirmPaymentResponse>;
+  confirmReceipt: GrpcMethod<ConfirmReceiptRequest, ConfirmReceiptResponse>;
+  openDispute: GrpcMethod<OpenDisputeRequest, OpenDisputeResponse>;
+  getTransactionStatus: GrpcMethod<TransactionStatusRequest, TransactionStatusResponse>;
+  setExchangerStatus: GrpcMethod<SetExchangerStatusRequest, SetExchangerStatusResponse>;
+  cancelTransaction: GrpcMethod<CancelTransactionRequest, CancelTransactionResponse>;
+  resolveDispute: GrpcMethod<ResolveDisputeRequest, ResolveDisputeResponse>;
+  freezeExchanger: GrpcMethod<FreezeExchangerRequest, FreezeExchangerResponse>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
 export interface Exchange {
@@ -132,51 +235,55 @@ export interface Exchange {
   updatedAt: Date;
 }
 
-export interface ExchangeService {
-  ListActiveExchanges(filters: {
+export interface ExchangeService extends GrpcService {
+  ListActiveExchanges: GrpcMethod<{
     userId?: string;
     status?: string;
     type?: ExchangeType;
-  }): Observable<Exchange[]>;
+  }, Exchange[]>;
   
-  ConfirmStep(data: {
+  ConfirmStep: GrpcMethod<{
     id: string;
     step: 'PAYMENT' | 'RECEIPT';
     evidence?: string;
-  }): Observable<Exchange>;
+  }, Exchange>;
   
-  OpenDispute(data: {
+  OpenDispute: GrpcMethod<{
     exchangeId: string;
     reason: string;
     evidence?: string[];
-  }): Observable<Dispute>;
+  }, Dispute>;
   
-  CreateListing(data: CreateListingDto): Observable<Listing>;
+  CreateListing: GrpcMethod<CreateListingDto, Listing>;
   
-  GetExchange(data: { id: string }): Observable<Exchange>;
+  GetExchange: GrpcMethod<{ id: string }, Exchange>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface DisputeService {
-  createDispute(data: any): Observable<any>;
-  resolveDispute(data: any): Observable<any>;
-  getDispute(data: any): Observable<any>;
-  getUserDisputes(data: any): Observable<any>;
-  addComment(data: any): Observable<any>;
+export interface DisputeService extends GrpcService {
+  createDispute: GrpcMethod<any, any>;
+  resolveDispute: GrpcMethod<any, any>;
+  getDispute: GrpcMethod<any, any>;
+  getUserDisputes: GrpcMethod<any, any>;
+  addComment: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface ReviewsService {
-  createReview(data: any): Observable<any>;
-  getUserReviews(data: any): Observable<any>;
-  getUserReviewStats(data: any): Observable<any>;
-  getReview(data: any): Observable<any>;
-  deleteReview(data: any): Observable<any>;
+export interface ReviewsService extends GrpcService {
+  createReview: GrpcMethod<any, any>;
+  getUserReviews: GrpcMethod<any, any>;
+  getUserReviewStats: GrpcMethod<any, any>;
+  getReview: GrpcMethod<any, any>;
+  deleteReview: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface BalanceService {
-  getBalance(data: any): Observable<any>;
-  createHold(data: any): Observable<any>;
-  releaseHold(data: any): Observable<any>;
-  transfer(data: any): Observable<any>;
+export interface BalanceService extends GrpcService {
+  getBalance: GrpcMethod<any, any>;
+  createHold: GrpcMethod<any, any>;
+  releaseHold: GrpcMethod<any, any>;
+  transfer: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
 export class GrpcError extends Error {
@@ -210,104 +317,122 @@ export interface GrpcServiceOptions {
   };
 }
 
-export interface AuditService {
-  createAuditLog(data: any): Observable<any>;
-  getUserAuditLogs(data: any): Observable<any>;
-  getEntityAuditLogs(data: any): Observable<any>;
-  getActionAuditLogs(data: any): Observable<any>;
+export interface AuditService extends GrpcService {
+  createAuditLog: GrpcMethod<any, any>;
+  getUserAuditLogs: GrpcMethod<any, any>;
+  getEntityAuditLogs: GrpcMethod<any, any>;
+  getActionAuditLogs: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface SchedulerService {
-  createTask(data: any): Observable<any>;
-  getTask(data: any): Observable<any>;
-  getTasks(data: any): Observable<any>;
-  updateTask(data: any): Observable<any>;
-  deleteTask(data: any): Observable<any>;
-  toggleTask(data: any): Observable<any>;
+export interface SchedulerService extends GrpcService {
+  createTask: GrpcMethod<any, any>;
+  getTask: GrpcMethod<any, any>;
+  getTasks: GrpcMethod<any, any>;
+  updateTask: GrpcMethod<any, any>;
+  deleteTask: GrpcMethod<any, any>;
+  toggleTask: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface NotificationsService {
-  sendNotification(data: any): Observable<any>;
-  getUserNotifications(data: any): Observable<any>;
-  markAsRead(data: any): Observable<any>;
-  markAllAsRead(data: any): Observable<any>;
-  deleteNotification(data: any): Observable<any>;
+export interface NotificationsService extends GrpcService {
+  sendNotification: GrpcMethod<{ userId: string; type: string; data: NotificationData }, void>;
+  getUserNotifications: GrpcMethod<{ userId: string }, Notification[]>;
+  markAsRead: GrpcMethod<{ notificationId: string; userId: string }, void>;
+  markAllAsRead: GrpcMethod<{ userId: string }, void>;
+  deleteNotification: GrpcMethod<{ notificationId: string; userId: string }, void>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface UserService {
-  createUser(data: any): Observable<any>;
-  updateUser(data: any): Observable<any>;
-  getUser(data: any): Observable<any>;
-  getUserByEmail(data: any): Observable<any>;
-  getUsers(data: any): Observable<any>;
-  activateExchanger(data: any): Observable<any>;
-  deactivateExchanger(data: any): Observable<any>;
-  freezeUser(data: any): Observable<any>;
-  unfreezeUser(data: any): Observable<any>;
+export interface NotificationData {
+  title?: string;
+  message: string;
+  priority?: 'low' | 'medium' | 'high';
+  metadata?: Record<string, unknown>;
 }
 
-export interface TransactionsService {
-  createTransaction(data: any): Observable<any>;
-  updateTransaction(data: any): Observable<any>;
-  getTransaction(data: any): Observable<any>;
-  getUserTransactions(data: any): Observable<any>;
-  getUserTransactionStats(data: any): Observable<any>;
-  confirmPayment(data: any): Observable<any>;
-  confirmReceipt(data: any): Observable<any>;
-  cancelTransaction(data: any): Observable<any>;
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  data: NotificationData;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ListingsService {
-  createListing(data: any): Observable<any>;
-  updateListing(data: any): Observable<any>;
-  getListing(data: any): Observable<any>;
-  getUserListings(data: any): Observable<any>;
-  getActiveListings(data: any): Observable<any>;
-  activateListing(data: any): Observable<any>;
-  deactivateListing(data: any): Observable<any>;
-  deleteListing(data: any): Observable<any>;
+export interface TransactionsService extends GrpcService {
+  createTransaction: GrpcMethod<any, any>;
+  updateTransaction: GrpcMethod<any, any>;
+  getTransaction: GrpcMethod<any, any>;
+  getUserTransactions: GrpcMethod<any, any>;
+  getUserTransactionStats: GrpcMethod<any, any>;
+  confirmPayment: GrpcMethod<any, any>;
+  confirmReceipt: GrpcMethod<any, any>;
+  cancelTransaction: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface OffersService {
-  createOffer(data: any): Observable<any>;
-  updateOffer(data: any): Observable<any>;
-  getOffer(data: any): Observable<any>;
-  getUserOffers(data: any): Observable<any>;
-  getListingOffers(data: any): Observable<any>;
-  acceptOffer(data: any): Observable<any>;
-  declineOffer(data: any): Observable<any>;
-  cancelOffer(data: any): Observable<any>;
+export interface OffersService extends GrpcService {
+  CreateOffer: GrpcMethod<CreateOfferRequest, Offer>;
+  UpdateOfferStatus: GrpcMethod<UpdateOfferStatusRequest, Offer>;
+  GetOffer: GrpcMethod<{ id: string }, Offer>;
+  ListOffers: GrpcMethod<{ userId?: string }, Offer[]>;
+  AcceptOffer: GrpcMethod<{ id: string }, Offer>;
+  RejectOffer: GrpcMethod<{ id: string }, Offer>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface FiltersService {
-  createFilter(data: any): Observable<any>;
-  updateFilter(data: any): Observable<any>;
-  getFilter(data: any): Observable<any>;
-  getUserFilters(data: any): Observable<any>;
-  deleteFilter(data: any): Observable<any>;
+export interface ListingsService extends GrpcService {
+  CreateListing: GrpcMethod<CreateListingDto, Listing>;
+  ListListings: GrpcMethod<{
+    type?: ExchangeType;
+    cryptocurrency?: string;
+    fiatCurrency?: string;
+    minRate?: number;
+    maxRate?: number;
+    paymentMethods?: string[];
+    isActive?: boolean;
+  }, Listing[]>;
+  GetListing: GrpcMethod<{ id: string }, Listing>;
+  UpdateListing: GrpcMethod<{ id: string; isActive: boolean }, Listing>;
+  DeleteListing: GrpcMethod<{ id: string }, void>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface TypesService {
-  getCryptocurrencies(data: any): Observable<any>;
-  getFiatCurrencies(data: any): Observable<any>;
-  getPaymentMethods(data: any): Observable<any>;
-  getTransactionStatuses(data: any): Observable<any>;
-  getUserRoles(data: any): Observable<any>;
+export interface FiltersService extends GrpcService {
+  createFilter: GrpcMethod<any, any>;
+  updateFilter: GrpcMethod<any, any>;
+  getFilter: GrpcMethod<any, any>;
+  getUserFilters: GrpcMethod<any, any>;
+  deleteFilter: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface KafkaService {
-  publishEvent(data: any): Observable<any>;
-  getTopics(data: any): Observable<any>;
-  createTopic(data: any): Observable<any>;
-  deleteTopic(data: any): Observable<any>;
+export interface TypesService extends GrpcService {
+  getCryptocurrencies: GrpcMethod<any, any>;
+  getFiatCurrencies: GrpcMethod<any, any>;
+  getPaymentMethods: GrpcMethod<any, any>;
+  getTransactionStatuses: GrpcMethod<any, any>;
+  getUserRoles: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
-export interface AuthService {
-  register(data: any): Observable<any>;
-  login(data: any): Observable<any>;
-  refreshToken(data: any): Observable<any>;
-  logout(data: any): Observable<any>;
-  validateToken(data: any): Observable<any>;
+export interface KafkaService extends GrpcService {
+  publishEvent: GrpcMethod<any, any>;
+  getTopics: GrpcMethod<any, any>;
+  createTopic: GrpcMethod<any, any>;
+  deleteTopic: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
+}
+
+export interface AuthService extends GrpcService {
+  register: GrpcMethod<any, any>;
+  login: GrpcMethod<any, any>;
+  refreshToken: GrpcMethod<any, any>;
+  logout: GrpcMethod<any, any>;
+  validateToken: GrpcMethod<any, any>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
 export interface P2PStats {
@@ -356,13 +481,14 @@ export interface P2PSettings {
   paymentTimeout: number;
 }
 
-export interface OfferService {
-  CreateOffer(data: CreateOfferRequest): Observable<Offer>;
-  UpdateOfferStatus(data: UpdateOfferStatusRequest): Observable<Offer>;
-  GetOffer(data: { id: string }): Observable<Offer>;
-  ListOffers(data: { userId?: string }): Observable<Offer[]>;
-  AcceptOffer(data: { id: string }): Observable<Offer>;
-  RejectOffer(data: { id: string }): Observable<Offer>;
+export interface OfferService extends GrpcService {
+  CreateOffer: GrpcMethod<CreateOfferRequest, Offer>;
+  UpdateOfferStatus: GrpcMethod<UpdateOfferStatusRequest, Offer>;
+  GetOffer: GrpcMethod<{ id: string }, Offer>;
+  ListOffers: GrpcMethod<{ userId?: string }, Offer[]>;
+  AcceptOffer: GrpcMethod<{ id: string }, Offer>;
+  RejectOffer: GrpcMethod<{ id: string }, Offer>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
 export interface CreateOfferRequest {
@@ -377,20 +503,21 @@ export interface UpdateOfferStatusRequest {
   reason?: string;
 }
 
-export interface ListingService {
-  CreateListing(data: CreateListingDto): Observable<Listing>;
-  ListListings(filters: {
+export interface ListingService extends GrpcService {
+  CreateListing: GrpcMethod<CreateListingDto, Listing>;
+  ListListings: GrpcMethod<{
     type?: ExchangeType;
     cryptocurrency?: string;
     fiatCurrency?: string;
     minRate?: number;
     maxRate?: number;
-    paymentMethods?: PaymentMethod[];
+    paymentMethods?: string[];
     isActive?: boolean;
-  }): Observable<Listing[]>;
-  GetListing(data: { id: string }): Observable<Listing>;
-  UpdateListing(data: { id: string; isActive: boolean }): Observable<Listing>;
-  DeleteListing(data: { id: string }): Observable<void>;
+  }, Listing[]>;
+  GetListing: GrpcMethod<{ id: string }, Listing>;
+  UpdateListing: GrpcMethod<{ id: string; isActive: boolean }, Listing>;
+  DeleteListing: GrpcMethod<{ id: string }, void>;
+  [key: string]: GrpcMethod<any, any>;
 }
 
 export interface GrpcMethod<TRequest = unknown, TResponse = unknown> {
@@ -399,4 +526,11 @@ export interface GrpcMethod<TRequest = unknown, TResponse = unknown> {
 
 export interface GrpcService {
   [key: string]: GrpcMethod;
+}
+
+export interface DisputeWithRelations extends PrismaDispute {
+  transaction: ExchangeTransaction & {
+    customer: Pick<PrismaUser, 'id' | 'email'>;
+    exchanger: Pick<PrismaUser, 'id' | 'email'>;
+  };
 } 

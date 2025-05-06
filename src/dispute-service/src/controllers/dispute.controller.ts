@@ -4,10 +4,13 @@ import { DisputeService } from '../services/dispute.service';
 // import { RolesGuard } from '../guards/roles.guard';
 // import { Roles } from '../decorators/roles.decorator';
 // import { User } from '../decorators/user.decorator';
-import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/shared/guards/roles.guard';
-import { Roles } from 'src/shared/decorators/roles.decorator';
-import { User } from 'src/shared/decorators/user.decorator';
+import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../shared/guards/roles.guard';
+import { Roles, UserRole } from '../../../shared/decorators/roles.decorator';
+import { User } from '../../../shared/decorators/user.decorator';
+import { GrpcMethod } from '@nestjs/microservices';
+import { CreateDisputeRequest, ResolveDisputeRequest } from '../../../proto/generated/disputes.pb';
+// import { CreateDisputeRequest, ResolveDisputeRequest } from '../../proto/generated/dispute.pb';
 
 class CreateDisputeDto {
   transactionId: string;
@@ -24,27 +27,24 @@ class ResolveDisputeDto {
 export class DisputeController {
   constructor(private readonly disputeService: DisputeService) {}
 
-  @Post()
-  async createDispute(
-    @User('id') userId: string,
-    @Body() dto: CreateDisputeDto
-  ) {
-    return this.disputeService.createDispute(dto.transactionId, userId, dto.reason);
+  @GrpcMethod('DisputeService', 'CreateDispute')
+  @Roles(UserRole.CUSTOMER, UserRole.EXCHANGER)
+  async createDispute(data: CreateDisputeRequest) {
+    return this.disputeService.createDispute(
+      data.transactionId,
+      data.initiatorId,
+      data.reason,
+    );
   }
 
-  @Put(':id/resolve')
-  @UseGuards(RolesGuard)
-  @Roles('MODERATOR', 'ADMIN')
-  async resolveDispute(
-    @User('id') moderatorId: string,
-    @Param('id') disputeId: string,
-    @Body() dto: ResolveDisputeDto
-  ) {
+  @GrpcMethod('DisputeService', 'ResolveDispute')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  async resolveDispute(data: ResolveDisputeRequest) {
     return this.disputeService.resolveDispute(
-      disputeId,
-      moderatorId,
-      dto.resolution,
-      dto.winnerUserId
+      data.disputeId,
+      data.moderatorId,
+      data.resolution,
+      data.winnerUserId,
     );
   }
 
@@ -55,7 +55,7 @@ export class DisputeController {
 
   @Get('open')
   @UseGuards(RolesGuard)
-  @Roles('MODERATOR', 'ADMIN')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
   async getOpenDisputes() {
     return this.disputeService.getOpenDisputes();
   }

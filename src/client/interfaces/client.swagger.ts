@@ -1,5 +1,6 @@
 import { ApiProperty, ApiTags, ApiExtraModels } from '@nestjs/swagger';
 import { ExchangeType, TransactionStatus, RespondAction, Role } from './enums';
+import { UserRole } from '@prisma/client';
 
 // User Service DTOs
 export class CreateUserDto {
@@ -23,23 +24,29 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto {
-  @ApiProperty({ description: 'ID пользователя', example: '123e4567-e89b-12d3-a456-426614174000' })
-  userId: string;
+  @ApiProperty({ description: 'User ID' })
+  id: string;
 
-  @ApiProperty({ description: 'Имя пользователя', example: 'John', required: false })
-  firstName?: string;
+  @ApiProperty({ description: 'User email', required: false })
+  email?: string;
 
-  @ApiProperty({ description: 'Фамилия пользователя', example: 'Doe', required: false })
-  lastName?: string;
+  @ApiProperty({ description: 'User name', required: false })
+  name?: string;
 
-  @ApiProperty({ description: 'Номер телефона', example: '+1234567890', required: false })
-  phoneNumber?: string;
+  @ApiProperty({ description: 'User password', required: false })
+  password?: string;
 
-  @ApiProperty({ description: 'Является ли пользователь обменником', example: false, required: false })
-  isExchanger?: boolean;
+  @ApiProperty({ description: 'User role', required: false })
+  role?: UserRole;
 
-  @ApiProperty({ description: 'Активен ли обменник', example: true, required: false })
+  @ApiProperty({ description: 'Is exchanger active', required: false })
   isExchangerActive?: boolean;
+
+  @ApiProperty({ description: 'Is user frozen', required: false })
+  isFrozen?: boolean;
+
+  @ApiProperty({ description: 'Is user online', required: false })
+  isOnline?: boolean;
 }
 
 // Balance Service DTOs

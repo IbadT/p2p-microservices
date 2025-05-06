@@ -86,12 +86,12 @@ services:
       - garant-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:4200/api/health"]
+      test: ["CMD", "wget", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - KAFKA_BROKERS=kafka:9092
       - FRONTEND_URL=http://localhost:3000

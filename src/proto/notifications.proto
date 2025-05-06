@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package notifications;
+
+service NotificationsService {
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+  rpc GetNotifications (GetNotificationsRequest) returns (GetNotificationsResponse);
+  rpc MarkAsRead (MarkAsReadRequest) returns (MarkAsReadResponse);
+}
+
+message SendNotificationRequest {
+  string userId = 1;
+  string message = 2;
+  string type = 3;
+  map<string, string> metadata = 4;
+}
+
+message SendNotificationResponse {
+  bool success = 1;
+  string notificationId = 2;
+}
+
+message GetNotificationsRequest {
+  string userId = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  bool unreadOnly = 4;
+}
+
+message GetNotificationsResponse {
+  repeated Notification notifications = 1;
+  int32 total = 2;
+}
+
+message MarkAsReadRequest {
+  string userId = 1;
+  string notificationId = 2;
+}
+
+message MarkAsReadResponse {
+  bool success = 1;
+}
+
+message Notification {
+  string id = 1;
+  string userId = 2;
+  string message = 3;
+  string type = 4;
+  string createdAt = 5;
+  bool read = 6;
+  map<string, string> metadata = 7;
+} 

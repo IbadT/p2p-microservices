@@ -55,9 +55,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     JwtAuthGuard.cleanupInterval = setInterval(async () => {
       try {
         await JwtAuthGuard.circuitBreaker.execute(async () => {
-          const keys = await this.cacheManager.store.keys?.('jwt:*');
-          if (keys?.length) {
-            await Promise.all(keys.map(key => this.cacheManager.del(key)));
+          const keys = await this.cacheManager.get('jwt:*');
+          if (keys) {
+            await this.cacheManager.del('jwt:*');
           }
         });
       } catch (error) {
@@ -80,7 +80,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         this.cacheManager.get<boolean>(cacheKey)
       );
 
-      if (cached !== undefined) {
+      if (cached !== undefined && cached !== null) {
         return cached;
       }
 

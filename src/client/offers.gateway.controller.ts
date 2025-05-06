@@ -12,50 +12,62 @@ import { offerSchema, responseSchema } from '../shared/schemas/offer.schema';
 import { CreateOfferDto, RespondToOfferDto } from './interfaces/offer.dto';
 import { 
   Offer, 
-  OfferService, 
+  OffersService, 
   CreateOfferRequest, 
   UpdateOfferStatusRequest,
   ExchangeOffer
 } from './interfaces/grpc.interfaces';
-import { OffersService } from '../offers/offers.service';
+import { OffersService as LocalOffersService } from '../offers/offers.service';
 import { BaseGrpcClient } from './base/base.grpc.client';
+import {
+  ApiCreateOffer,
+  ApiGetAllOffers,
+  ApiGetOfferById,
+  ApiAcceptOffer,
+  ApiRejectOffer,
+  ApiCancelOffer,
+  ApiRespondExchangeOffer
+} from './swagger/client.swagger';
+import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 
 @ApiTags('Offers')
 @Controller('offers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
 @ApiBearerAuth()
 export class OffersGatewayController extends BaseGrpcClient implements OnModuleInit {
-  private offerService: OfferService;
+  private offerService: OffersService;
   
   constructor(
     @Inject('OFFER_PACKAGE') protected readonly client: ClientGrpc,
     private readonly p2pClient: P2PGrpcClient,
-    private readonly offersService: OffersService
+    private readonly offersService: LocalOffersService
   ) {
-    super(client, 'OfferService');
+    super(client, 'OffersService');
   }
 
   onModuleInit() {
-    this.offerService = this.getService<OfferService>('OfferService');
+    this.offerService = this.getService<OffersService>('OffersService');
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SetMetadata('roles', ['Customer'])
+  @ApiCreateOffer()
   async create(@Body() dto: CreateOfferRequest): Promise<Offer> {
     return this.callGrpcMethod<Offer>(this.offerService.CreateOffer, dto);
   }
 
   @Patch(':id/status')
+  @ApiOperation({ summary: 'Update offer status' })
+  @ApiResponse({ status: 200, description: 'Offer status updated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateStatus(@Param('id') id: string, @Body() dto: Omit<UpdateOfferStatusRequest, 'id'>): Promise<Offer> {
     return this.callGrpcMethod<Offer>(this.offerService.UpdateOfferStatus, { id, ...dto });
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get offer by ID' })
-  @ApiResponse({ status: 200, description: 'Offer retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Offer not found' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiGetOfferById()
   async getOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string): Promise<Offer> {
     const ip = req.ip || req.connection.remoteAddress;
     if (!ip) {
@@ -72,9 +84,8 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
     return this.convertExchangeOfferToOffer(result);
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Создать предложение обмена' })
-  @ApiResponse({ status: 201, description: 'Предложение успешно создано' })
+  @Post('exchange')
+  @ApiCreateOffer()
   async createExchangeOffer(@Body() dto: CreateExchangeOfferDto): Promise<Offer> {
     const result = await this.p2pClient.createExchangeOffer(dto);
     if (!result) {
@@ -84,8 +95,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   }
 
   @Post(':id/respond')
-  @ApiOperation({ summary: 'Ответить на предложение обмена' })
-  @ApiResponse({ status: 200, description: 'Ответ успешно отправлен' })
+  @ApiRespondExchangeOffer()
   async respondExchangeOffer(@Body() dto: RespondExchangeOfferDto): Promise<Offer> {
     const result = await this.p2pClient.respondExchangeOffer(dto);
     if (!result) {
@@ -94,83 +104,8 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
     return this.convertExchangeOfferToOffer(result);
   }
 
-  @Post('create')
-  @ApiOperation({ summary: 'Create a new offer' })
-  @ApiResponse({ status: 201, description: 'Offer created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
-  async createOffer(@Req() req: AuthenticatedRequest, @Body() dto: CreateOfferDto): Promise<Offer> {
-    const ip = req.ip || req.connection.remoteAddress;
-    if (!ip) {
-      throw new BadRequestException('IP address is required');
-    }
-
-    if (!SecurityManager.validateInput(dto, offerSchema)) {
-      throw new BadRequestException('Invalid input');
-    }
-
-    await SecurityManager.checkRateLimit(ip, 'createOffer');
-    const result = await QueueManager.addToQueue('offer', async () => {
-      return this.p2pClient.createOffer(dto);
-    });
-    if (!result) {
-      throw new BadRequestException('Failed to create offer');
-    }
-    return result;
-  }
-
-  @Post('respond')
-  @ApiOperation({ summary: 'Respond to an offer' })
-  @ApiResponse({ status: 200, description: 'Response sent successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 429, description: 'Too many requests' })
-  async respondToOffer(@Req() req: AuthenticatedRequest, @Body() dto: RespondToOfferDto): Promise<Offer> {
-    const ip = req.ip || req.connection.remoteAddress;
-    if (!ip) {
-      throw new BadRequestException('IP address is required');
-    }
-
-    if (!SecurityManager.validateInput(dto, responseSchema)) {
-      throw new BadRequestException('Invalid input');
-    }
-
-    await SecurityManager.checkRateLimit(ip, 'respondToOffer');
-    const result = await QueueManager.addToQueue('offer', async () => {
-      return this.p2pClient.respondToOffer(dto);
-    });
-    if (!result) {
-      throw new BadRequestException('Failed to respond to offer');
-    }
-    return result;
-  }
-
-  @Post()
-  @ApiOperation({ summary: 'Create a new offer' })
-  @ApiResponse({ status: 201, description: 'The offer has been successfully created.' })
-  @ApiResponse({ status: 400, description: 'Bad request.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async createOfferDto(@Req() req: AuthenticatedRequest, @Body() createOfferDto: CreateOfferDto): Promise<Offer> {
-    const result = await this.offersService.createOffer(req.user.id, {
-      listingId: createOfferDto.toUserId,
-      amount: createOfferDto.amount
-    });
-    if (!result) {
-      throw new BadRequestException('Failed to create offer');
-    }
-    return this.convertExchangeOfferToOffer({
-      id: result.id,
-      customerId: req.user.id,
-      listingId: result.listingId,
-      amount: result.amount,
-      exchangeType: 'CRYPTO_TO_FIAT',
-      conditions: '',
-      status: result.status
-    });
-  }
-
   @Get()
-  @ApiOperation({ summary: 'Get all offers' })
-  @ApiResponse({ status: 200, description: 'Return all offers.' })
+  @ApiGetAllOffers()
   async findAll(): Promise<Offer[]> {
     const results = await this.offersService.listOffers();
     return results.map(result => this.convertExchangeOfferToOffer({
@@ -184,30 +119,8 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
     }));
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get an offer by id' })
-  @ApiResponse({ status: 200, description: 'Return the offer.' })
-  @ApiResponse({ status: 404, description: 'Offer not found.' })
-  async findOne(@Param('id') id: string): Promise<Offer> {
-    const result = await this.offersService.findOne(id);
-    if (!result) {
-      throw new BadRequestException('Offer not found');
-    }
-    return this.convertExchangeOfferToOffer({
-      id: result.id,
-      customerId: result.userId,
-      listingId: result.listingId,
-      amount: result.amount,
-      exchangeType: 'CRYPTO_TO_FIAT',
-      conditions: '',
-      status: result.status
-    });
-  }
-
   @Post(':id/accept')
-  @ApiOperation({ summary: 'Accept an offer' })
-  @ApiResponse({ status: 200, description: 'The offer has been successfully accepted.' })
-  @ApiResponse({ status: 404, description: 'Offer not found.' })
+  @ApiAcceptOffer()
   async accept(@Param('id') id: string): Promise<Offer> {
     const result = await this.offersService.acceptOffer(id);
     if (!result) {
@@ -225,10 +138,8 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   }
 
   @Post(':id/reject')
-  @ApiOperation({ summary: 'Reject an offer' })
-  @ApiResponse({ status: 200, description: 'The offer has been successfully rejected.' })
-  @ApiResponse({ status: 404, description: 'Offer not found.' })
-  async reject(@Param('id') id: string): Promise<Offer> {
+  @ApiRejectOffer()
+  async reject(@Param('id') id: string, @Body('reason') reason: string): Promise<Offer> {
     const result = await this.offersService.rejectOffer(id);
     if (!result) {
       throw new BadRequestException('Failed to reject offer');
@@ -242,6 +153,19 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
       conditions: '',
       status: result.status
     });
+  }
+
+  @Post(':id/cancel')
+  @ApiCancelOffer()
+  async cancel(@Param('id') id: string): Promise<Offer> {
+    const result = await this.callGrpcMethod<Offer>(this.offerService.UpdateOfferStatus, { 
+      id, 
+      status: 'CANCELLED' 
+    });
+    if (!result) {
+      throw new BadRequestException('Failed to cancel offer');
+    }
+    return result;
   }
 
   private convertExchangeOfferToOffer(exchangeOffer: ExchangeOffer): Offer {

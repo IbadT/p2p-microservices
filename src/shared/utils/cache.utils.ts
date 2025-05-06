@@ -40,9 +40,9 @@ export class CacheUtils {
 
   static async cleanupExpiredKeys(cache: Cache, pattern: string): Promise<void> {
     try {
-      const keys = await this.circuitBreaker.execute(() => cache.store.keys?.(pattern));
-      if (keys?.length) {
-        await Promise.all(keys.map(key => this.circuitBreaker.execute(() => cache.del(key))));
+      const value = await this.circuitBreaker.execute(() => cache.get(pattern));
+      if (value) {
+        await this.circuitBreaker.execute(() => cache.del(pattern));
       }
     } catch (error) {
       this.logger.error(`Cache cleanup failed: ${error.message}`, error.stack);
@@ -51,9 +51,9 @@ export class CacheUtils {
 
   static async invalidatePattern(cache: Cache, pattern: string): Promise<void> {
     try {
-      const keys = await this.circuitBreaker.execute(() => cache.store.keys?.(pattern));
-      if (keys?.length) {
-        await Promise.all(keys.map(key => this.circuitBreaker.execute(() => cache.del(key))));
+      const value = await this.circuitBreaker.execute(() => cache.get(pattern));
+      if (value) {
+        await this.circuitBreaker.execute(() => cache.del(pattern));
       }
     } catch (error) {
       this.logger.error(`Cache invalidation failed: ${error.message}`, error.stack);
