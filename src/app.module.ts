@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleDestroy } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { PrismaService } from './prisma.service';
@@ -18,11 +18,27 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { ExchangeModule } from './exchange-service/src/exchange.module';
 import { DisputeModule } from './dispute-service/src/dispute.module';
 import { PrismaClient } from '@prisma/client';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-store';
+import type { RedisClientOptions } from 'redis';
+import { ShutdownService } from './shared/services/shutdown.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    CacheModule.registerAsync<RedisClientOptions>({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        store: redisStore as any,
+        socket: {
+          host: configService.get('REDIS_HOST', 'localhost'),
+          port: configService.get('REDIS_PORT', 6379),
+        },
+        ttl: 3600,
+      }),
+      inject: [ConfigService],
     }),
     SentryModule.forRoot(),
     TransactionsModule,
@@ -46,6 +62,13 @@ import { PrismaClient } from '@prisma/client';
       useClass: SentryGlobalFilter,
     },
     PrismaService,
+    ShutdownService,
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleDestroy {
+  constructor(private readonly shutdownService: ShutdownService) {}
+
+  async onModuleDestroy() {
+    await this.shutdownService.onModuleDestroy();
+  }
+}

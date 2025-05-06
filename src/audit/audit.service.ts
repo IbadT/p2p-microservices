@@ -31,7 +31,7 @@ export class AuditService {
     //   entityId: auditLog.entityId,
     // });
     await this.kafka.sendEvent({
-      type: "",
+      type: "audit.log.created",
       payload: {
         auditLogId: auditLog.id,
         userId: auditLog.userId,

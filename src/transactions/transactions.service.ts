@@ -50,7 +50,7 @@ export class TransactionsService {
     //   updatedBy: userId,
     // });
     await this.kafka.sendEvent({
-      type: "",
+      type: "exchange.transaction.statusChanged",
       payload: {
         transaction: updatedTransaction,
         previousStatus: transaction.status,
@@ -99,7 +99,7 @@ export class TransactionsService {
         //   cryptocurrency: transaction.cryptocurrency,
         // });
         await this.kafka.sendEvent({
-          type: "",
+          type: "balance.transfer",
           payload: {
             fromUserId: transaction.exchangerId,
             toUserId: transaction.customerId,
@@ -116,7 +116,7 @@ export class TransactionsService {
         //   transactionId: transaction.id,
         // });
         await this.kafka.sendEvent({
-          type: "",
+          type: "balance.hold.release",
           payload: {
             transactionId: transaction.id,
           }
@@ -134,7 +134,7 @@ export class TransactionsService {
         });
         // await this.kafka.emit('exchange.transaction.finished', { transaction });
         await this.kafka.sendEvent({
-          type: "",
+          type: "exchange.transaction.finished",
           payload: {
             transaction
           }

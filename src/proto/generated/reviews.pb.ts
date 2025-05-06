@@ -12,11 +12,11 @@ import { Observable } from "rxjs";
 export const protobufPackage = "reviews";
 
 export interface CreateReviewRequest {
-  reviewerId: string;
-  reviewedId: string;
+  transactionId: string;
+  authorId: string;
+  targetId: string;
   rating: number;
   comment: string;
-  exchangeId: string;
 }
 
 export interface UpdateReviewRequest {

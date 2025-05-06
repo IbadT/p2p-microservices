@@ -53,21 +53,15 @@ export class DisputeService {
       });
 
       // Create hold on funds if necessary
-      // await this.kafka.emit('balance.hold.create', {
-      //   userId: transaction.exchangerId,
-      //   amount: transaction.cryptoAmount,
-      //   type: 'DISPUTE',
-      //   relatedTransactionId: transactionId,
-      // });
       await this.kafka.sendEvent({
-        type: "",
+        type: "balance.hold.create",
         payload: {
           userId: transaction.exchangerId,
           amount: transaction.cryptoAmount,
           type: 'DISPUTE',
           relatedTransactionId: transactionId,
         }
-      })
+      });
 
       return dispute;
     });
@@ -116,31 +110,22 @@ export class DisputeService {
 
       // Transfer or return funds based on resolution
       if (winnerUserId === dispute.transaction.customerId) {
-        // await this.kafka.emit('balance.transfer', {
-        //   fromUserId: dispute.transaction.exchangerId,
-        //   toUserId: dispute.transaction.customerId,
-        //   amount: dispute.transaction.cryptoAmount,
-        //   cryptocurrency: dispute.transaction.cryptocurrency,
-        // });
         await this.kafka.sendEvent({
-        type: "",
-        payload: {
-          fromUserId: dispute.transaction.exchangerId,
-          toUserId: dispute.transaction.customerId,
-          amount: dispute.transaction.cryptoAmount,
-          cryptocurrency: dispute.transaction.cryptocurrency,
-        }
-      })
+          type: "balance.transfer",
+          payload: {
+            fromUserId: dispute.transaction.exchangerId,
+            toUserId: dispute.transaction.customerId,
+            amount: dispute.transaction.cryptoAmount,
+            cryptocurrency: dispute.transaction.cryptocurrency,
+          }
+        });
       } else {
-        // await this.kafka.emit('balance.hold.release', {
-        //   transactionId: dispute.transactionId,
-        // });
         await this.kafka.sendEvent({
-        type: "",
-        payload: {
-          transactionId: dispute.transactionId,
-        }
-      })
+          type: "balance.hold.release",
+          payload: {
+            transactionId: dispute.transactionId,
+          }
+        });
       }
     });
   }
@@ -204,6 +189,49 @@ export class DisputeService {
           },
         },
       },
+    });
+  }
+
+  async addDisputeComment(
+    disputeId: string,
+    moderatorId: string,
+    comment: string
+  ) {
+    await this.kafka.sendEvent({
+      type: "dispute.comment.added",
+      payload: {
+        disputeId,
+        moderatorId,
+        comment,
+      }
+    });
+  }
+
+  async changeDisputeStatus(
+    disputeId: string,
+    newStatus: string
+  ) {
+    await this.kafka.sendEvent({
+      type: "dispute.status.changed",
+      payload: {
+        disputeId,
+        newStatus,
+      }
+    });
+  }
+
+  async addDisputeResolution(
+    disputeId: string,
+    moderatorId: string,
+    resolution: string
+  ) {
+    await this.kafka.sendEvent({
+      type: "dispute.resolution.added",
+      payload: {
+        disputeId,
+        moderatorId,
+        resolution,
+      }
     });
   }
 } 

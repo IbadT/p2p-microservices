@@ -28,7 +28,7 @@ export class UsersService {
     });
 
     await this.kafka.sendEvent({
-      type: '',
+      type: "user.created",
       payload: {
         userId: user.id,
         email: user.email,
@@ -62,7 +62,7 @@ export class UsersService {
     });
 
     await this.kafka.sendEvent({
-      type: "",
+      type: "user.updated",
       payload: {
         userId: user.id,
         isExchangerActive: user.isExchangerActive,
@@ -108,5 +108,20 @@ export class UsersService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  async findAll() {
+    const users = await this.prisma.user.findMany();
+    return users.map(user => ({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isExchangerActive: user.isExchangerActive,
+      isFrozen: user.isFrozen,
+      frozenUntil: user.frozenUntil,
+      missedOffersCount: user.missedOffersCount,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
   }
 }

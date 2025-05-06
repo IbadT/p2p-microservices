@@ -99,21 +99,15 @@ export class BalanceService {
       });
 
       // Emit Kafka event
-      // await this.kafka.emit('balance.hold.created', {
-      //   hold,
-      //   userId,
-      //   cryptocurrency,
-      //   amount,
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        hold,
-        userId,
-        cryptocurrency,
-        amount,
-      }
-    });
+        type: "balance.hold.created",
+        payload: {
+          userId,
+          amount,
+          type,
+          transactionId: relatedTransactionId,
+        }
+      });
 
       return hold;
     });
@@ -151,21 +145,15 @@ export class BalanceService {
       });
 
       // Emit Kafka event
-      // await this.kafka.emit('balance.hold.released', {
-      //   holdId,
-      //   userId: hold.userId,
-      //   cryptocurrency: hold.cryptocurrency,
-      //   amount: hold.amount,
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        holdId,
-        userId: hold.userId,
-        cryptocurrency: hold.cryptocurrency,
-        amount: hold.amount,
-      }
-    });
+        type: "balance.hold.released",
+        payload: {
+          userId: hold.userId,
+          amount: hold.amount,
+          type: hold.type,
+          transactionId: hold.relatedTransactionId,
+        }
+      });
     });
   }
 
@@ -173,7 +161,8 @@ export class BalanceService {
     fromUserId: string,
     toUserId: string,
     cryptocurrency: string,
-    amount: number
+    amount: number,
+    transactionId: string
   ) {
     return this.prisma.$transaction(async (prisma) => {
       const [fromBalance, toBalance] = await Promise.all([
@@ -216,21 +205,16 @@ export class BalanceService {
       ]);
 
       // Emit Kafka event
-      // await this.kafka.emit('balance.transferred', {
-      //   fromUserId,
-      //   toUserId,
-      //   cryptocurrency,
-      //   amount,
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        fromUserId,
-        toUserId,
-        cryptocurrency,
-        amount,
-      }
-    });
+        type: "balance.transfer.completed",
+        payload: {
+          fromUserId,
+          toUserId,
+          amount,
+          cryptocurrency,
+          transactionId,
+        }
+      });
     });
   }
 
@@ -251,12 +235,12 @@ export class BalanceService {
     });
 
     await this.kafka.sendEvent({
-      type: "",
+      type: "balance.updated",
       payload: {
         userId,
         cryptocurrency,
-        amount,
         newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
+        change: amount,
       }
     });
 
@@ -286,12 +270,12 @@ export class BalanceService {
       });
 
       await this.kafka.sendEvent({
-        type: "",
+        type: "balance.updated",
         payload: {
           userId,
           cryptocurrency,
-          amount,
           newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
+          change: amount,
         }
       });
 

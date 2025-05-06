@@ -1,11 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { UpdateTransactionStatusDto } from '../dto/exchange.dto';
-
+import { ExchangeListingFilterDto } from '../dto/exchange.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { AuditService } from 'src/audit/audit.service';
+import { 
+  ExchangeListing, 
+  ExchangeOffer, 
+  ExchangeTransaction, 
+  ExchangerStatus,
+  RespondAction,
+} from '../interfaces/exchange.interface';
+import { TransactionStatus, OfferStatus } from '@prisma/client';
 
 @Injectable()
 export class ExchangeService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ExchangeService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly kafka: KafkaService,
+    private readonly notificationsGateway: NotificationsGateway,
+    private readonly auditService: AuditService,
+  ) {}
 
   // async getActiveExchanges() {
   //   return this.prisma.$queryRaw`SELECT * FROM exchange WHERE status NOT IN ('CANCELLED', 'DECLINED', 'FINISHED') AND updatedAt > NOW() - INTERVAL 24 HOUR`;
@@ -13,95 +31,362 @@ export class ExchangeService {
 
   //   // async getActiveExchanges(userId: string): Promise<ExchangeTransaction[]> {
   async getActiveExchanges(userId: string) {
-    // return this.prisma.exchangeTransaction.findMany({
-    //   where: {
-    //     OR: [
-    //       { customerId: userId },
-    //       { exchangerId: userId },
-    //     ],
-    //     AND: {
-    //       isActive: true,
-    //       finishedAt: null,
-    //     },
-    //   },
-    //   include: {
-    //     listing: true,
-    //     offer: true,
-    //     customer: {
-    //       select: {
-    //         id: true,
-    //         email: true,
-    //       },
-    //     },
-    //     exchanger: {
-    //       select: {
-    //         id: true,
-    //         email: true,
-    //       },
-    //     },
-    //   },
-    // });
+    this.logger.log(`Fetching active exchanges for user ${userId}`);
+    return this.prisma.exchangeTransaction.findMany({
+      where: {
+        OR: [
+          { customerId: userId },
+          { exchangerId: userId },
+        ],
+        isActive: true,
+        status: { notIn: ['CANCELLED', 'DECLINED', 'FINISHED'] },
+      },
+      include: {
+        listing: true,
+        offer: true,
+        customer: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        exchanger: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
   }
 
-  async openDispute(exchangeId: number) {
-    const exchange: any = await this.prisma.$queryRaw`SELECT * FROM exchange WHERE id = ${exchangeId}`;
-    if (exchange.customer.isVulnerable || exchange.exchanger.isVulnerable) {
-      // Открыть спор
-    }
-  }
+  // async openDispute(exchangeId: number) {
+  //   const exchange: any = await this.prisma.$queryRaw`SELECT * FROM exchange WHERE id = ${exchangeId}`;
+  //   if (exchange.customer.isVulnerable || exchange.exchanger.isVulnerable) {
+  //     // Открыть спор
+  //   }
+  // }
 
-  async leaveReview(exchangeId: number, review: string) {
-    const exchange: any = await this.prisma.$queryRaw`SELECT * FROM exchange WHERE id = ${exchangeId}`;
-    if (exchange.customer.canLeaveReview || exchange.exchanger.canLeaveReview) {
-      // Сохранить отзыв
+  async leaveReview(exchangeId: string, review: string, rating: number, authorId: string) {
+    this.logger.log(`User ${authorId} is leaving a review for transaction ${exchangeId}`);
+    // Получаем сделку
+    const exchange = await this.prisma.exchangeTransaction.findUnique({
+      where: { id: exchangeId },
+    });
+    if (!exchange) {
+      this.logger.warn(`Transaction ${exchangeId} not found`);
+      throw new NotFoundException('Transaction not found');
     }
-    const exchanger: any = await this.prisma.$queryRaw`SELECT * FROM exchanger WHERE id = ${exchangerId}`;
-    await this.prisma.$queryRaw`UPDATE exchanger SET missedOffersCount = missedOffersCount + 1 WHERE id = ${exchangerId}`;
+
+    // Проверяем, может ли оставить отзыв
+    if (exchange.customerId !== authorId) {
+      this.logger.warn(`User ${authorId} is not the customer for transaction ${exchangeId}`);
+      throw new ForbiddenException('Only Customer can leave a review');
+    }
+    if (!['COMPLETED', 'FINISHED', 'DISPUTED'].includes(exchange.status)) {
+      this.logger.warn(`Review can only be left after COMPLETED, FINISHED or DISPUTED. Current status: ${exchange.status}`);
+      throw new ConflictException('Review can only be left after COMPLETED, FINISHED or DISPUTED');
+    }
+
+    // Создаем отзыв
+    await this.prisma.review.create({
+      data: {
+        transactionId: exchangeId,
+        authorId,
+        targetId: exchange.exchangerId,
+        rating,
+        comment: review,
+      },
+    });
+
+    // Инкрементируем счетчик пропущенных офферов
+    const exchanger = await this.prisma.user.update({
+      where: { id: exchange.exchangerId },
+      data: { missedOffersCount: { increment: 1 } },
+    });
+
+    // Если пропущено 5 офферов подряд — замораживаем Exchanger
     if (exchanger.missedOffersCount >= 5) {
-      await this.toggleExchangerActiveStatus(exchangerId);
+      await this.prisma.user.update({
+        where: { id: exchange.exchangerId },
+        data: { isExchangerActive: false, isFrozen: true },
+      });
+      await this.kafka.sendEvent({
+        type: 'exchanger.frozen',
+        payload: { exchangerId: exchange.exchangerId },
+      });
+      this.notificationsGateway.notifyUser(exchange.exchangerId, 'exchanger.frozen', {});
+      await this.auditService.createAuditLog({
+        userId: exchange.exchangerId,
+        action: 'FREEZE_EXCHANGER',
+        entityType: 'User',
+        entityId: exchange.exchangerId,
+        details: JSON.stringify({ reason: 'missed offers' }),
+        ipAddress: '',
+      });
     }
   }
 
-  async createListing(userId: number, data: any) {
-    // реализация метода
+  private convertToExchangeListing(listing: any): ExchangeListing {
+    return {
+      ...listing,
+      createdAt: listing.createdAt.toISOString(),
+      updatedAt: listing.updatedAt.toISOString(),
+    };
   }
 
-  async filterListings(data: any) {
-    // реализация метода
+  private convertToExchangeOffer(offer: any): ExchangeOffer {
+    return {
+      ...offer,
+      createdAt: offer.createdAt.toISOString(),
+      updatedAt: offer.updatedAt.toISOString(),
+    };
   }
 
-  async createOffer(userId: number, data: any) {
-    // реализация метода
+  private convertToExchangeTransaction(transaction: any): ExchangeTransaction {
+    return {
+      ...transaction,
+      confirmationDeadline: transaction.confirmationDeadline.toISOString(),
+      createdAt: transaction.createdAt.toISOString(),
+      updatedAt: transaction.updatedAt.toISOString(),
+      finishedAt: transaction.finishedAt?.toISOString(),
+    };
   }
 
-  async updateTransactionStatus(
-    transactionId: string,
-    userId: string,
-    dto: UpdateTransactionStatusDto
-  // ): Promise<ExchangeTransaction> {
-  ) {
-    // const transaction = await this.prisma.exchangeTransaction.findUnique({
-    //   where: { id: transactionId },
-    //   include: { listing: true },
-    // });
+  private convertToExchangerStatus(status: any): ExchangerStatus {
+    return {
+      exchangerId: status.userId,
+      online: status.autoAcceptOffers,
+      isFrozen: !status.autoAcceptOffers,
+      lastActivity: status.updatedAt.toISOString(),
+    };
+  }
 
-    // if (!transaction) {
-    //   throw new Error('Transaction not found');
-    // }
+  async createListing(data: any): Promise<ExchangeListing> {
+    try {
+      const listing = await this.prisma.exchangeListing.create({
+        data: {
+          ...data,
+          isActive: true,
+        },
+      });
+      return this.convertToExchangeListing(listing);
+    } catch (error) {
+      this.logger.error(`Error creating listing: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
 
-    // // Validate status transition
-    // this.validateStatusTransition(transaction.status, dto.status as TransactionStatus);
+  async getListings(query: any): Promise<ExchangeListing[]> {
+    try {
+      const listings = await this.prisma.exchangeListing.findMany({
+        where: {
+          ...query,
+          isActive: true,
+        },
+      });
+      return listings.map(this.convertToExchangeListing);
+    } catch (error) {
+      this.logger.error(`Error getting listings: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
 
-    // // Update transaction status
-    // const updatedTransaction = await this.prisma.exchangeTransaction.update({
-    //   where: { id: transactionId },
-    //   data: {
-    //     status: dto.status,
-    //     paymentProof: dto.paymentProof,
-    //     canCustomerDispute: this.calculateCustomerDisputeAbility(dto.status as TransactionStatus),
-    //     canExchangerDispute: this.calculateExchangerDisputeAbility(dto.status as TransactionStatus),
-    //   },
-    // });
+  async createOffer(data: any): Promise<ExchangeOffer> {
+    try {
+      const offer = await this.prisma.exchangeOffer.create({
+        data: {
+          ...data,
+          status: TransactionStatus.PENDING_OFFER,
+        },
+      });
+      return this.convertToExchangeOffer(offer);
+    } catch (error) {
+      this.logger.error(`Error creating offer: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async respondOffer(data: any): Promise<ExchangeOffer> {
+    try {
+      const { offerId, exchangerId, action } = data;
+      const offer = await this.prisma.exchangeOffer.update({
+        where: { id: offerId },
+        data: {
+          status: action === RespondAction.ACCEPT ? OfferStatus.ACCEPTED : OfferStatus.DECLINED,
+        },
+      });
+      return this.convertToExchangeOffer(offer);
+    } catch (error) {
+      this.logger.error(`Error responding to offer: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async updateTransactionStatus(data: any): Promise<ExchangeTransaction> {
+    try {
+      const { transactionId, userId, status, paymentProof } = data;
+      const transaction = await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status,
+          paymentProof,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangeTransaction(transaction);
+    } catch (error) {
+      this.logger.error(`Error updating transaction status: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async archiveOldExchanges() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const exchanges = await this.prisma.exchangeTransaction.findMany({
+      where: {
+        isActive: true,
+        status: { in: ['COMPLETED', 'CANCELLED', 'DECLINED', 'FINISHED'] },
+        updatedAt: { lt: cutoff },
+      },
+    });
+    for (const ex of exchanges) {
+      await this.prisma.exchangeTransaction.update({
+        where: { id: ex.id },
+        data: { isActive: false },
+      });
+      await this.kafka.sendEvent({
+        type: 'exchange.archived',
+        payload: { exchangeId: ex.id },
+      });
+      this.notificationsGateway.notifyUser(ex.customerId, 'exchange.archived', { exchangeId: ex.id });
+      this.notificationsGateway.notifyUser(ex.exchangerId, 'exchange.archived', { exchangeId: ex.id });
+      await this.auditService.createAuditLog({
+        userId: ex.customerId,
+        action: 'ARCHIVE_EXCHANGE',
+        entityType: 'ExchangeTransaction',
+        entityId: ex.id,
+        details: JSON.stringify({ reason: 'TTL' }),
+        ipAddress: '',
+      });
+    }
+  }
+
+  async confirmPayment(data: any): Promise<ExchangeTransaction> {
+    try {
+      const { transactionId, exchangerId, paymentReference } = data;
+      const transaction = await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.PAYMENT_CONFIRMED,
+          paymentProof: paymentReference,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangeTransaction(transaction);
+    } catch (error) {
+      this.logger.error(`Error confirming payment: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async confirmReceipt(data: any): Promise<ExchangeTransaction> {
+    try {
+      const { transactionId, customerId } = data;
+      const transaction = await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.COMPLETED,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangeTransaction(transaction);
+    } catch (error) {
+      this.logger.error(`Error confirming receipt: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async cancelTransaction(data: any): Promise<ExchangeTransaction> {
+    try {
+      const { transactionId, cancelledBy, reason } = data;
+      const transaction = await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.CANCELLED,
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangeTransaction(transaction);
+    } catch (error) {
+      this.logger.error(`Error cancelling transaction: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async setExchangerStatus(data: any): Promise<ExchangerStatus> {
+    try {
+      const { exchangerId, online } = data;
+      const status = await this.prisma.exchangerSettings.upsert({
+        where: { userId: exchangerId },
+        update: { updatedAt: new Date() },
+        create: {
+          userId: exchangerId,
+          autoAcceptOffers: false,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangerStatus(status);
+    } catch (error) {
+      this.logger.error(`Error setting exchanger status: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async freezeExchanger(data: any): Promise<ExchangerStatus> {
+    try {
+      const { exchangerId, reason } = data;
+      const status = await this.prisma.exchangerSettings.update({
+        where: { userId: exchangerId },
+        data: {
+          autoAcceptOffers: false,
+          updatedAt: new Date(),
+        },
+      });
+      return this.convertToExchangerStatus(status);
+    } catch (error) {
+      this.logger.error(`Error freezing exchanger: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async filterListings(filter: ExchangeListingFilterDto) {
+    const where: any = {
+      isActive: filter.isActive ?? true,
+      ...(filter.type && { type: filter.type }),
+      ...(filter.cryptocurrency && { cryptocurrency: filter.cryptocurrency }),
+      ...(filter.fiatCurrency && { fiatCurrency: filter.fiatCurrency }),
+      ...(filter.minRate && { rate: { gte: filter.minRate } }),
+      ...(filter.maxRate && { rate: { lte: filter.maxRate } }),
+      ...(filter.paymentMethods?.length && {
+        paymentMethods: { hasEvery: filter.paymentMethods }
+      }),
+    };
+  
+    return this.prisma.exchangeListing.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            isExchangerActive: true,
+          },
+        },
+      },
+    });
   }
 }
 

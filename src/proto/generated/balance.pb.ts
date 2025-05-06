@@ -66,6 +66,7 @@ export interface TransferRequest {
   toUserId: string;
   cryptocurrency: string;
   amount: number;
+  transactionId: string;
 }
 
 export interface DepositRequest {

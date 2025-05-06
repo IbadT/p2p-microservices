@@ -46,6 +46,7 @@ model User {
   exchangerSettings ExchangerSettings?
   holds             BalanceHold[]
   auditLogs         AuditLog[]
+  exchangerStatus   ExchangerStatus?
 
   @@index([isExchangerActive])
   @@index([isFrozen])
@@ -67,14 +68,14 @@ model ExchangeListing {
   minAmount       Float
   maxAmount       Float
   availableAmount Float
-  paymentMethods  PaymentMethod[]
+  paymentMethods  String[]
   terms           String?
+  userId          String
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   // Relationships
-  userId          String
   user            User             @relation(fields: [userId], references: [id])
   offers          ExchangeOffer[]
   transactions    ExchangeTransaction[]
@@ -100,7 +101,7 @@ enum PaymentMethod {
 model ExchangeOffer {
   id              String           @id @default(uuid())
   amount          Float
-  status          OfferStatus      @default(PENDING)
+  status          TransactionStatus @default(PENDING)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -116,40 +117,45 @@ model ExchangeOffer {
   @@index([listingId])
 }
 
-enum OfferStatus {
+enum TransactionStatus {
   PENDING
-  ACCEPTED
+  APPROVED
   DECLINED
-  EXPIRED
+  PAYMENT_CONFIRMED
+  RECEIPT_CONFIRMED
+  FINISHED
+  CANCELLED
+  DISPUTE_OPEN
+  DISPUTE_RESOLVED
 }
 
 model ExchangeTransaction {
   id                String           @id @default(uuid())
   type              ExchangeType
-  status            TransactionStatus @default(PENDING_OFFER)
+  status            TransactionStatus
   cryptocurrency    String
   fiatCurrency      String
   cryptoAmount      Float
   fiatAmount        Float
-  paymentProof      String?          // URL к доказательству оплаты
+  paymentProof      String?
   disputeId         String?
-  confirmationDeadline DateTime      // Таймер 30 минут
-  canCustomerDispute Boolean         @default(false)
-  canExchangerDispute Boolean        @default(false)
-  isActive          Boolean          @default(true)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  finishedAt        DateTime?        // When transaction reached FINISHED state
+  confirmationDeadline DateTime
+  canCustomerDispute  Boolean         @default(true)
+  canExchangerDispute Boolean         @default(true)
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  finishedAt        DateTime?
 
   // Relationships
-  offerId           String?          @unique
-  offer             ExchangeOffer?   @relation(fields: [offerId], references: [id])
+  offerId           String?         @unique
+  offer             ExchangeOffer?  @relation(fields: [offerId], references: [id])
   customerId        String
-  customer          User             @relation(fields: [customerId], references: [id], name: "CustomerTransactions")
+  customer          User            @relation("CustomerTransactions", fields: [customerId], references: [id])
   exchangerId       String
-  exchanger         User             @relation(fields: [exchangerId], references: [id], name: "ExchangerTransactions")
+  exchanger         User            @relation("ExchangerTransactions", fields: [exchangerId], references: [id])
   listingId         String
-  listing           ExchangeListing  @relation(fields: [listingId], references: [id])
+  listing           ExchangeListing @relation(fields: [listingId], references: [id])
   dispute           Dispute?
   review            Review?
 
@@ -159,18 +165,6 @@ model ExchangeTransaction {
   @@index([confirmationDeadline])
   @@index([isActive])
   @@index([finishedAt])
-}
-
-enum TransactionStatus {
-  PENDING_OFFER // Initial state when offer is created
-  PENDING_PAYMENT // After offer is accepted, waiting for payment
-  PAYMENT_SENT // Customer marked payment as sent
-  PAYMENT_CONFIRMED // Exchanger confirmed payment receipt
-  COMPLETED // Transaction fully completed
-  CANCELLED // Transaction cancelled
-  DECLINED // Offer declined by exchanger
-  DISPUTED // Under dispute
-  FINISHED // Final state after 24 hours of completion
 }
 
 model Dispute {
@@ -297,4 +291,14 @@ enum TaskStatus {
   IN_PROGRESS
   COMPLETED
   FAILED
+}
+
+model ExchangerStatus {
+  id            String    @id @default(uuid())
+  exchangerId   String    @unique
+  online        Boolean   @default(false)
+  isFrozen      Boolean   @default(false)
+  frozenReason  String?
+  lastActivity  DateTime  @default(now())
+  exchanger     User      @relation(fields: [exchangerId], references: [id])
 }

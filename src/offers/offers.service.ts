@@ -3,12 +3,17 @@ import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { Prisma } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class OffersService {
   constructor(
     private prisma: PrismaService,
-    private kafka: KafkaService
+    private kafka: KafkaService,
+    private notificationsGateway: NotificationsGateway,
+    private auditService: AuditService,
   ) {}
 
   async createOffer(userId: string, data: {
@@ -26,19 +31,14 @@ export class OffersService {
     // Start transaction
     return this.prisma.$transaction(async (prisma) => {
       // Create hold on user's balance
-      // await this.kafka.emit('balance.hold.create', {
-      //   userId,
-      //   amount: data.amount,
-      //   type: 'EXCHANGE_OFFER',
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        userId,
-        amount: data.amount,
-        type: 'EXCHANGE_OFFER',
-      }
-    });
+        type: "balance.hold.create",
+        payload: {
+          userId,
+          amount: data.amount,
+          type: 'EXCHANGE_OFFER',
+        }
+      });
 
       // Create offer
       const offer = await prisma.exchangeOffer.create({
@@ -50,19 +50,22 @@ export class OffersService {
       });
 
       // Emit Kafka event
-      // await this.kafka.emit('exchange.offer.created', {
-      //   offer,
-      //   userId,
-      //   listingId: data.listingId,
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        offer,
-        userId,
+        type: 'offer.created',
+        payload: {
+          offerId: offer.id,
+          userId,
+          listingId: data.listingId,
+          amount: data.amount,
+        }
+      });
+
+      // Emit WebSocket notification
+      this.notificationsGateway.notifyUser(userId, 'offer.created', {
+        offerId: offer.id,
         listingId: data.listingId,
-      }
-    });
+        amount: data.amount,
+      });
 
       // Create transaction
       const transaction = await prisma.exchangeTransaction.create({
@@ -82,17 +85,23 @@ export class OffersService {
       });
 
       // Emit Kafka event
-      // await this.kafka.emit('exchange.transaction.created', {
-      //   transaction,
-      //   offerId: offer.id,
-      // });
       await this.kafka.sendEvent({
-      type: "",
-      payload: {
-        transaction,
-        offerId: offer.id,
-      }
-    });
+        type: "exchange.transaction.created",
+        payload: {
+          transaction,
+          offerId: offer.id,
+        }
+      });
+
+      // Audit log
+      await this.auditService.createAuditLog({
+        userId,
+        action: 'CREATE_OFFER',
+        entityType: 'ExchangeOffer',
+        entityId: offer.id,
+        details: JSON.stringify({ listingId: data.listingId, amount: data.amount }),
+        ipAddress: '', // Можно получить из запроса, если нужно
+      });
 
       return offer;
     });
@@ -115,5 +124,58 @@ export class OffersService {
       timeLeft: Math.max(0, timeLeft),
       isExpired: timeLeft <= 0,
     };
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async hideOldOffers() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await this.prisma.exchangeOffer.updateMany({
+      where: {
+        status: { in: ['DECLINED', 'EXPIRED'] },
+        updatedAt: { lt: cutoff },
+      },
+      data: { updatedAt: new Date() },
+    });
+  }
+
+  async listOffers() {
+    return this.prisma.exchangeOffer.findMany({
+      include: {
+        transaction: true,
+        listing: true,
+      },
+    });
+  }
+
+  async rejectOffer(id: string) {
+    return this.prisma.exchangeOffer.update({
+      where: { id },
+      data: { status: 'DECLINED' },
+      include: {
+        transaction: true,
+        listing: true,
+      },
+    });
+  }
+
+  async acceptOffer(id: string) {
+    return this.prisma.exchangeOffer.update({
+      where: { id },
+      data: { status: 'ACCEPTED' },
+      include: {
+        transaction: true,
+        listing: true,
+      },
+    });
+  }
+
+  async findOne(id: string) {
+    return this.prisma.exchangeOffer.findUnique({
+      where: { id },
+      include: {
+        transaction: true,
+        listing: true,
+      },
+    });
   }
 }

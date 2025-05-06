@@ -18,6 +18,7 @@ export interface CreateUserRequest {
   lastName: string;
   phoneNumber: string;
   isExchanger: boolean;
+  role: string;
 }
 
 export interface UpdateUserRequest {

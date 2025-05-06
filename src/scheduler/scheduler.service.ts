@@ -96,7 +96,16 @@ export class SchedulerService {
     for (const task of tasks) {
       try {
         await this.kafka.sendEvent({
-          type: "",
+          type: "exchanger.status.checked",
+          payload: {
+            taskId: task.id,
+            type: task.type,
+            data: task.data,
+          }
+        });
+
+        await this.kafka.sendEvent({
+          type: "exchanger.status.frozen",
           payload: {
             taskId: task.id,
             type: task.type,
@@ -113,7 +122,7 @@ export class SchedulerService {
         });
       } catch (error) {
         await this.kafka.sendEvent({
-          type: "",
+          type: "scheduler.task.failed",
           payload: {
             taskId: task.id,
             error: error.message,

@@ -55,10 +55,23 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
+    .setTitle('P2P Exchange Platform API')
+    .setDescription('API documentation for the P2P Exchange Platform')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .addTag('auth', 'Authentication endpoints')
+    .addTag('listings', 'Exchange listings management')
+    .addTag('offers', 'Exchange offers management')
+    .addTag('transactions', 'Exchange transactions management')
+    .addTag('disputes', 'Dispute resolution')
+    .addTag('users', 'User management')
+    .addTag('balance', 'Balance operations')
+    .addTag('reviews', 'User reviews')
     .build();
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   if (NODE_ENV !== 'production') {
+    // Swagger будет доступен по /api/docs
     SwaggerModule.setup('api', app, swaggerDocument);
   }
 

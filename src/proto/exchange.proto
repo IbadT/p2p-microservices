@@ -3,16 +3,59 @@ syntax = "proto3";
 package exchange;
 
 service ExchangeService {
+  // Listing Operations
   rpc CreateListing (CreateListingRequest) returns (ExchangeListing);
   rpc GetListings (GetListingsRequest) returns (GetListingsResponse);
+  
+  // Offer Operations
   rpc CreateOffer (CreateOfferRequest) returns (ExchangeOffer);
+  rpc RespondOffer (RespondOfferRequest) returns (RespondOfferResponse);
+  
+  // Transaction Operations
   rpc UpdateTransactionStatus (UpdateTransactionStatusRequest) returns (ExchangeTransaction);
   rpc GetActiveExchanges (GetActiveExchangesRequest) returns (GetActiveExchangesResponse);
+  rpc ConfirmPayment (ConfirmPaymentRequest) returns (ConfirmPaymentResponse);
+  rpc ConfirmReceipt (ConfirmReceiptRequest) returns (ConfirmReceiptResponse);
+  rpc CancelTransaction (CancelTransactionRequest) returns (CancelTransactionResponse);
+  
+  // Exchanger Management
+  rpc SetExchangerStatus (SetExchangerStatusRequest) returns (SetExchangerStatusResponse);
+  rpc FreezeExchanger (FreezeExchangerRequest) returns (FreezeExchangerResponse);
 }
 
+// Enums
+enum ExchangeType {
+  CRYPTO_TO_FIAT = 0;
+  FIAT_TO_CRYPTO = 1;
+}
+
+enum TransactionStatus {
+  PENDING = 0;
+  APPROVED = 1;
+  DECLINED = 2;
+  PAYMENT_CONFIRMED = 3;
+  RECEIPT_CONFIRMED = 4;
+  FINISHED = 5;
+  CANCELLED = 6;
+  DISPUTE_OPEN = 7;
+  DISPUTE_RESOLVED = 8;
+}
+
+enum RespondAction {
+  ACCEPT = 0;
+  DECLINE = 1;
+}
+
+enum Role {
+  CUSTOMER = 0;
+  EXCHANGER = 1;
+  MODERATOR = 2;
+}
+
+// Messages
 message CreateListingRequest {
   string userId = 1;
-  string type = 2;
+  ExchangeType type = 2;
   string cryptocurrency = 3;
   string fiatCurrency = 4;
   double rate = 5;
@@ -25,7 +68,7 @@ message CreateListingRequest {
 
 message ExchangeListing {
   string id = 1;
-  string type = 2;
+  ExchangeType type = 2;
   string cryptocurrency = 3;
   string fiatCurrency = 4;
   double rate = 5;
@@ -41,7 +84,7 @@ message ExchangeListing {
 }
 
 message GetListingsRequest {
-  optional string type = 1;
+  optional ExchangeType type = 1;
   optional string cryptocurrency = 2;
   optional string fiatCurrency = 3;
   optional double minRate = 4;
@@ -63,24 +106,36 @@ message CreateOfferRequest {
 message ExchangeOffer {
   string id = 1;
   double amount = 2;
-  string status = 3;
+  TransactionStatus status = 3;
   string userId = 4;
   string listingId = 5;
   string createdAt = 6;
   string updatedAt = 7;
 }
 
+message RespondOfferRequest {
+  string offerId = 1;
+  string exchangerId = 2;
+  RespondAction action = 3;
+}
+
+message RespondOfferResponse {
+  string offerId = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
 message UpdateTransactionStatusRequest {
   string transactionId = 1;
   string userId = 2;
-  string status = 3;
+  TransactionStatus status = 3;
   optional string paymentProof = 4;
 }
 
 message ExchangeTransaction {
   string id = 1;
-  string type = 2;
-  string status = 3;
+  ExchangeType type = 2;
+  TransactionStatus status = 3;
   string cryptocurrency = 4;
   string fiatCurrency = 5;
   double cryptoAmount = 6;
@@ -106,4 +161,61 @@ message GetActiveExchangesRequest {
 
 message GetActiveExchangesResponse {
   repeated ExchangeTransaction transactions = 1;
+}
+
+message ConfirmPaymentRequest {
+  string transactionId = 1;
+  string exchangerId = 2;
+  string paymentReference = 3;
+}
+
+message ConfirmPaymentResponse {
+  string transactionId = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message ConfirmReceiptRequest {
+  string transactionId = 1;
+  string customerId = 2;
+}
+
+message ConfirmReceiptResponse {
+  string transactionId = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message CancelTransactionRequest {
+  string transactionId = 1;
+  Role cancelledBy = 2;
+  string reason = 3;
+}
+
+message CancelTransactionResponse {
+  string transactionId = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message SetExchangerStatusRequest {
+  string exchangerId = 1;
+  bool online = 2;
+}
+
+message SetExchangerStatusResponse {
+  string exchangerId = 1;
+  bool online = 2;
+  string message = 3;
+}
+
+message FreezeExchangerRequest {
+  string exchangerId = 1;
+  string reason = 2;
+}
+
+message FreezeExchangerResponse {
+  string exchangerId = 1;
+  bool isFrozen = 2;
+  string message = 3;
 } 

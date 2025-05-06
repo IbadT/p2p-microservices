@@ -15,6 +15,7 @@ message CreateUserRequest {
   string lastName = 4;
   string phoneNumber = 5;
   bool isExchanger = 6;
+  string role = 7;
 }
 
 message UpdateUserRequest {

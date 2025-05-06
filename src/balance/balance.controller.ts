@@ -43,7 +43,8 @@ export class BalanceController {
       data.fromUserId,
       data.toUserId,
       data.cryptocurrency,
-      data.amount
+      data.amount,
+      data.transactionId
     );
   }
 

@@ -1,45 +1,23 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
+import { GrpcMethod } from '@nestjs/microservices';
 import { SchedulerService } from './scheduler.service';
-import { TaskStatus } from '@prisma/client';
+import { CreateScheduledTaskRequest, GetScheduledTaskRequest } from '../proto/generated/scheduler.pb';
 
-@Controller('scheduler')
+@Controller()
 export class SchedulerController {
   constructor(private readonly schedulerService: SchedulerService) {}
 
-  @Post('tasks')
-  async createTask(@Body() data: {
-    type: string;
-    data: any;
-    scheduledAt: Date;
-  }) {
-    return this.schedulerService.createScheduledTask(data);
+  @GrpcMethod('SchedulerService', 'CreateScheduledTask')
+  async createTask(data: CreateScheduledTaskRequest) {
+    return this.schedulerService.createScheduledTask({
+      type: data.type,
+      data: data.data,
+      scheduledAt: new Date(data.schedule)
+    });
   }
 
-  @Post('tasks/:id')
-  async updateTask(
-    @Param('id') id: string,
-    @Body() data: {
-      status?: TaskStatus;
-      data?: any;
-      scheduledAt?: Date;
-      executedAt?: Date;
-    }
-  ) {
-    return this.schedulerService.updateScheduledTask(id, data);
-  }
-
-  @Get('tasks')
-  async listTasks(@Query() data: {
-    type?: string;
-    status?: TaskStatus;
-    page?: number;
-    limit?: number;
-  }) {
-    return this.schedulerService.listScheduledTasks(data);
-  }
-
-  @Get('tasks/:id')
-  async getTask(@Param('id') id: string) {
-    return this.schedulerService.getScheduledTask(id);
+  @GrpcMethod('SchedulerService', 'GetScheduledTask')
+  async getTask(data: GetScheduledTaskRequest) {
+    return this.schedulerService.getScheduledTask(data.taskId);
   }
 }

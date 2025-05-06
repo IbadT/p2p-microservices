@@ -9,6 +9,7 @@ service BalanceService {
   rpc Transfer (TransferRequest) returns (Empty);
   rpc Deposit (DepositRequest) returns (Balance);
   rpc Withdraw (WithdrawRequest) returns (Balance);
+  rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
 }
 
 message Empty {}
@@ -55,6 +56,7 @@ message TransferRequest {
   string toUserId = 2;
   string cryptocurrency = 3;
   double amount = 4;
+  string transactionId = 5;
 }
 
 message DepositRequest {
@@ -67,4 +69,31 @@ message WithdrawRequest {
   string userId = 1;
   string cryptocurrency = 2;
   double amount = 3;
+}
+
+message GetTransactionHistoryRequest {
+  string userId = 1;
+  optional string cryptocurrency = 2;
+  optional string startDate = 3;
+  optional string endDate = 4;
+  optional int32 page = 5;
+  optional int32 limit = 6;
+}
+
+message TransactionHistoryEntry {
+  string id = 1;
+  string userId = 2;
+  string type = 3;
+  string cryptocurrency = 4;
+  double amount = 5;
+  optional string relatedTransactionId = 6;
+  string status = 7;
+  string createdAt = 8;
+}
+
+message GetTransactionHistoryResponse {
+  repeated TransactionHistoryEntry transactions = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
 } 

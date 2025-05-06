@@ -7,14 +7,15 @@ service ReviewsService {
   rpc UpdateReview (UpdateReviewRequest) returns (Review) {}
   rpc GetReview (GetReviewRequest) returns (Review) {}
   rpc GetUserReviews (GetUserReviewsRequest) returns (ReviewsResponse) {}
+  rpc GetReviewStats (GetReviewStatsRequest) returns (GetReviewStatsResponse) {}
 }
 
 message CreateReviewRequest {
-  string reviewerId = 1;
-  string reviewedId = 2;
-  int32 rating = 3;
-  string comment = 4;
-  string exchangeId = 5;
+  string transactionId = 1;
+  string authorId = 2;
+  string targetId = 3;
+  int32 rating = 4;
+  string comment = 5;
 }
 
 message UpdateReviewRequest {
@@ -50,4 +51,29 @@ message Review {
   string exchangeId = 6;
   string createdAt = 7;
   string updatedAt = 8;
+}
+
+message GetReviewStatsRequest {
+  string userId = 1;
+  optional string startDate = 2;
+  optional string endDate = 3;
+}
+
+message ReviewStats {
+  double averageRating = 1;
+  int32 totalReviews = 2;
+  map<int32, int32> ratingDistribution = 3;
+  double positivePercentage = 4;
+  double negativePercentage = 5;
+  double neutralPercentage = 6;
+  repeated string recentComments = 7;
+  int32 totalExchanges = 8;
+  double reviewRate = 9;
+}
+
+message GetReviewStatsResponse {
+  ReviewStats stats = 1;
+  string userId = 2;
+  string periodStart = 3;
+  string periodEnd = 4;
 } 

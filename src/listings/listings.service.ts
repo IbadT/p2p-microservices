@@ -4,12 +4,17 @@ import { PrismaService } from '../prisma.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 // import { ExchangeType, PaymentMethod, Prisma } from '../../generated/prisma';
 import { ExchangeType, PaymentMethod, Prisma } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ListingsService {
   constructor(
     private prisma: PrismaService,
-    private kafka: KafkaService
+    private kafka: KafkaService,
+    private notificationsGateway: NotificationsGateway,
+    private auditService: AuditService,
   ) {}
 
   async createListing(userId: string, data: {
@@ -96,7 +101,7 @@ export class ListingsService {
     //   isActive,
     // });
     await this.kafka.sendEvent({
-      type: "",
+      type: "exchange.listing.statusChanged",
       payload: {
         listingId,
         isActive,
@@ -123,5 +128,35 @@ export class ListingsService {
     });
 
     return listing;
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async deactivateOldListings() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const listings = await this.prisma.exchangeListing.findMany({
+      where: {
+        isActive: true,
+        updatedAt: { lt: cutoff },
+      },
+    });
+    for (const listing of listings) {
+      await this.prisma.exchangeListing.update({
+        where: { id: listing.id },
+        data: { isActive: false },
+      });
+      await this.kafka.sendEvent({
+        type: 'exchange.listing.deactivated',
+        payload: { listingId: listing.id },
+      });
+      this.notificationsGateway.notifyUser(listing.userId, 'listing.deactivated', { listingId: listing.id });
+      await this.auditService.createAuditLog({
+        userId: listing.userId,
+        action: 'DEACTIVATE_LISTING',
+        entityType: 'ExchangeListing',
+        entityId: listing.id,
+        details: JSON.stringify({ reason: 'TTL' }),
+        ipAddress: '',
+      });
+    }
   }
 }

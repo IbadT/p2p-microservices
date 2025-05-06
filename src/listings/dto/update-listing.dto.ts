@@ -1,4 +1,9 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateListingDto } from './create-listing.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsOptional } from 'class-validator';
 
-export class UpdateListingDto extends PartialType(CreateListingDto) {}
+export class UpdateListingDto {
+  @ApiProperty({ description: 'Listing active status', required: false })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}
