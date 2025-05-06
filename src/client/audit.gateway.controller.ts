@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { CreateAuditLogDto } from '../audit/dto/create-audit-log.dto';
 import { ApiCreateAuditLog, ApiGetAllAuditLogs, ApiGetAuditLogById } from './swagger/client.swagger';
 
-@ApiTags('audit')
+@ApiTags('Audit')
 @Controller('audit')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()

@@ -8,6 +8,7 @@ import { CreateDisputeDto, ResolveDisputeDto, AddCommentDto } from '../interface
 import { CreateAuditLogDto } from '../interfaces/client.swagger';
 import { CreateReviewDto } from '../interfaces/client.swagger';
 import { CreateTaskDto } from 'src/scheduler/dto/create-task.dto';
+import { BalanceResponse, BalanceHoldResponse, TransactionHistoryResponse } from './balance.swagger';
 
 class UserDto {
   id: string;
@@ -109,37 +110,73 @@ export function ApiDeactivateExchanger() {
 }
 
 // Balance Service Documentation
-export const ApiGetBalance = () => {
+export function ApiGetBalance() {
   return applyDecorators(
     ApiOperation({ summary: 'Get user balance' }),
-    ApiParam({ name: 'userId', type: 'string', description: 'User ID' }),
-    ApiResponse({ status: 200, description: 'Balance retrieved successfully' }),
-    ApiResponse({ status: 404, description: 'User not found' }),
-    ApiResponse({ status: 500, description: 'Internal server error' }),
+    ApiParam({ name: 'userId', description: 'User ID' }),
+    ApiResponse({ status: 200, description: 'Returns user balance', type: BalanceResponse }),
+    ApiResponse({ status: 404, description: 'User not found' })
   );
-};
+}
 
-export const ApiCreateHold = () => {
+export function ApiCreateHold() {
   return applyDecorators(
-    ApiOperation({ summary: 'Create a hold on funds' }),
-    ApiBody({
-      schema: {
-        type: 'object',
-        properties: {
-          userId: { type: 'string', description: 'User ID' },
-          cryptocurrency: { type: 'string', description: 'Cryptocurrency code' },
-          amount: { type: 'number', description: 'Amount to hold' },
-          type: { type: 'string', description: 'Hold type' },
-          relatedTransactionId: { type: 'string', description: 'Related transaction ID' },
-        },
-        required: ['userId', 'cryptocurrency', 'amount', 'type'],
-      },
-    }),
-    ApiResponse({ status: 201, description: 'Hold created successfully' }),
-    ApiResponse({ status: 400, description: 'Bad request' }),
-    ApiResponse({ status: 500, description: 'Internal server error' }),
+    ApiOperation({ summary: 'Create balance hold' }),
+    ApiResponse({ status: 201, description: 'Hold created successfully', type: BalanceHoldResponse }),
+    ApiResponse({ status: 400, description: 'Invalid request data' }),
+    ApiResponse({ status: 404, description: 'User not found' })
   );
-};
+}
+
+export function ApiReleaseHold() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Release balance hold' }),
+    ApiParam({ name: 'holdId', description: 'Hold ID' }),
+    ApiResponse({ status: 200, description: 'Hold released successfully' }),
+    ApiResponse({ status: 404, description: 'Hold not found' })
+  );
+}
+
+export function ApiTransfer() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Transfer funds between users' }),
+    ApiResponse({ status: 200, description: 'Transfer completed successfully' }),
+    ApiResponse({ status: 400, description: 'Invalid request data or insufficient funds' }),
+    ApiResponse({ status: 404, description: 'User not found' })
+  );
+}
+
+export function ApiDeposit() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Deposit funds to user balance' }),
+    ApiResponse({ status: 200, description: 'Deposit completed successfully', type: BalanceResponse }),
+    ApiResponse({ status: 400, description: 'Invalid request data' }),
+    ApiResponse({ status: 404, description: 'User not found' })
+  );
+}
+
+export function ApiWithdraw() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Withdraw funds from user balance' }),
+    ApiResponse({ status: 200, description: 'Withdrawal completed successfully', type: BalanceResponse }),
+    ApiResponse({ status: 400, description: 'Invalid request data or insufficient funds' }),
+    ApiResponse({ status: 404, description: 'User not found' })
+  );
+}
+
+export function ApiGetTransactionHistory() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get user transaction history' }),
+    ApiParam({ name: 'userId', description: 'User ID' }),
+    ApiQuery({ name: 'cryptocurrency', required: false, description: 'Filter by cryptocurrency' }),
+    ApiQuery({ name: 'startDate', required: false, description: 'Filter by start date (ISO format)' }),
+    ApiQuery({ name: 'endDate', required: false, description: 'Filter by end date (ISO format)' }),
+    ApiQuery({ name: 'page', required: false, description: 'Page number for pagination' }),
+    ApiQuery({ name: 'limit', required: false, description: 'Number of items per page' }),
+    ApiResponse({ status: 200, description: 'Returns transaction history', type: TransactionHistoryResponse }),
+    ApiResponse({ status: 404, description: 'User not found' })
+  );
+}
 
 // Dispute Service Documentation
 export function ApiCreateDispute() {

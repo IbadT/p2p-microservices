@@ -2,7 +2,18 @@ import { Injectable, Inject } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { BALANCE_SERVICE } from '../constants';
-import { GetBalanceDto, CreateHoldDto } from '../interfaces/client.swagger';
+import { 
+  GetBalanceRequest, 
+  CreateHoldRequest, 
+  ReleaseHoldRequest, 
+  TransferRequest, 
+  DepositRequest, 
+  WithdrawRequest,
+  GetTransactionHistoryRequest,
+  Balance,
+  BalanceHold,
+  GetTransactionHistoryResponse
+} from '../../proto/generated/balance.pb';
 
 @Injectable()
 export class BalanceGrpcClient extends BaseGrpcClient {
@@ -14,49 +25,71 @@ export class BalanceGrpcClient extends BaseGrpcClient {
 
   /**
    * Получает баланс пользователя
-   * @param dto - Данные для получения баланса
-   * @returns {Promise<UserBalance>} Баланс пользователя
+   * @param request - Данные для получения баланса
+   * @returns {Promise<Balance>} Баланс пользователя
    */
-  async getBalance(dto: GetBalanceDto) {
+  async getBalance(request: GetBalanceRequest): Promise<Balance> {
     const service = this.getService<any>('BalanceService');
-    return this.callGrpcMethod(service.getBalance, dto);
+    return this.callGrpcMethod(service.getBalance, request);
   }
 
   /**
    * Создает холд на балансе
-   * @param dto - Данные для создания холда
+   * @param request - Данные для создания холда
    * @returns {Promise<BalanceHold>} Созданный холд
    */
-  async createHold(dto: CreateHoldDto) {
+  async createHold(request: CreateHoldRequest): Promise<BalanceHold> {
     const service = this.getService<any>('BalanceService');
-    return this.callGrpcMethod(service.createHold, dto);
+    return this.callGrpcMethod(service.createHold, request);
   }
 
   /**
    * Освобождает холд
-   * @param holdId - ID холда
+   * @param request - Данные для освобождения холда
    * @returns {Promise<void>}
    */
-  async releaseHold(holdId: string) {
+  async releaseHold(request: ReleaseHoldRequest): Promise<void> {
     const service = this.getService<any>('BalanceService');
-    return this.callGrpcMethod(service.releaseHold, { holdId });
+    return this.callGrpcMethod(service.releaseHold, request);
   }
 
   /**
    * Переводит средства между пользователями
-   * @param fromUserId - ID отправителя
-   * @param toUserId - ID получателя
-   * @param amount - Сумма
-   * @param cryptocurrency - Криптовалюта
+   * @param request - Данные для перевода
    * @returns {Promise<void>}
    */
-  async transfer(fromUserId: string, toUserId: string, amount: number, cryptocurrency: string) {
+  async transfer(request: TransferRequest): Promise<void> {
     const service = this.getService<any>('BalanceService');
-    return this.callGrpcMethod(service.transfer, {
-      fromUserId,
-      toUserId,
-      amount,
-      cryptocurrency,
-    });
+    return this.callGrpcMethod(service.transfer, request);
+  }
+
+  /**
+   * Пополняет баланс пользователя
+   * @param request - Данные для пополнения
+   * @returns {Promise<Balance>} Обновленный баланс
+   */
+  async deposit(request: DepositRequest): Promise<Balance> {
+    const service = this.getService<any>('BalanceService');
+    return this.callGrpcMethod(service.deposit, request);
+  }
+
+  /**
+   * Снимает средства с баланса пользователя
+   * @param request - Данные для снятия
+   * @returns {Promise<Balance>} Обновленный баланс
+   */
+  async withdraw(request: WithdrawRequest): Promise<Balance> {
+    const service = this.getService<any>('BalanceService');
+    return this.callGrpcMethod(service.withdraw, request);
+  }
+
+  /**
+   * Получает историю транзакций пользователя
+   * @param request - Данные для получения истории
+   * @returns {Promise<GetTransactionHistoryResponse>} История транзакций
+   */
+  async getTransactionHistory(request: GetTransactionHistoryRequest): Promise<GetTransactionHistoryResponse> {
+    const service = this.getService<any>('BalanceService');
+    return this.callGrpcMethod(service.getTransactionHistory, request);
   }
 } 
