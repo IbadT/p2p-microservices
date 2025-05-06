@@ -3,11 +3,16 @@ import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { GrpcMethod } from '@nestjs/microservices';
-import { UpdateTransactionStatusRequest, GetActiveExchangesRequest } from '../proto/generated/exchange.pb';
+import { UpdateTransactionStatusRequest, GetActiveExchangesRequest, TransactionStatus as ProtoTransactionStatus } from '../proto/generated/exchange.pb';
+import { TransactionStatus } from '@prisma/client';
 
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
+
+  private convertProtoStatusToPrisma(status: ProtoTransactionStatus): TransactionStatus {
+    return TransactionStatus[ProtoTransactionStatus[status]];
+  }
 
   // @Post(':id/confirm')
   // confirmTransaction(
@@ -26,14 +31,11 @@ export class TransactionsController {
 
   @GrpcMethod('ExchangeService', 'UpdateTransactionStatus')
   async updateTransactionStatus(data: UpdateTransactionStatusRequest) {
-    return this.transactionsService.updateTransactionStatus(
-      data.transactionId,
-      data.userId,
-      {
-        status: data.status,
-        paymentProof: data.paymentProof,
-      },
-    );
+    return this.transactionsService.updateTransactionStatus({
+      transactionId: data.transactionId,
+      status: this.convertProtoStatusToPrisma(data.status),
+      paymentProof: data.paymentProof,
+    });
   }
 
   @GrpcMethod('ExchangeService', 'GetActiveExchanges')

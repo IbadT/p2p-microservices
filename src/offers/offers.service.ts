@@ -6,6 +6,9 @@ import { Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
+import { NotificationType } from 'src/client/interfaces/enums';
+import { TransactionStatus } from '@prisma/client';
+// import { NotificationType } from '../notifications/notification-type.enum';
 
 @Injectable()
 export class OffersService {
@@ -32,7 +35,7 @@ export class OffersService {
     return this.prisma.$transaction(async (prisma) => {
       // Create hold on user's balance
       await this.kafka.sendEvent({
-        type: "balance.hold.create",
+        type: NotificationType.BALANCE_HOLD_CREATED,
         payload: {
           userId,
           amount: data.amount,
@@ -51,7 +54,7 @@ export class OffersService {
 
       // Emit Kafka event
       await this.kafka.sendEvent({
-        type: 'offer.created',
+        type: NotificationType.OFFER_CREATED,
         payload: {
           offerId: offer.id,
           userId,
@@ -61,7 +64,7 @@ export class OffersService {
       });
 
       // Emit WebSocket notification
-      this.notificationsGateway.notifyUser(userId, 'offer.created', {
+      this.notificationsGateway.notifyUser(userId, NotificationType.OFFER_CREATED, {
         offerId: offer.id,
         listingId: data.listingId,
         amount: data.amount,
@@ -71,7 +74,7 @@ export class OffersService {
       const transaction = await prisma.exchangeTransaction.create({
         data: {
           type: listing.type,
-          status: 'PENDING_OFFER',
+          status: TransactionStatus.PENDING,
           cryptocurrency: listing.cryptocurrency,
           fiatCurrency: listing.fiatCurrency,
           cryptoAmount: data.amount,
@@ -86,10 +89,10 @@ export class OffersService {
 
       // Emit Kafka event
       await this.kafka.sendEvent({
-        type: "exchange.transaction.created",
+        type: NotificationType.TRANSACTION_CREATED,
         payload: {
-          transaction,
-          offerId: offer.id,
+          transactionId: transaction.id,
+          offerId: offer.id
         }
       });
 
@@ -99,8 +102,10 @@ export class OffersService {
         action: 'CREATE_OFFER',
         entityType: 'ExchangeOffer',
         entityId: offer.id,
-        details: JSON.stringify({ listingId: data.listingId, amount: data.amount }),
-        ipAddress: '', // Можно получить из запроса, если нужно
+        metadata: {
+          details: JSON.stringify({ listingId: data.listingId, amount: data.amount }),
+          ipAddress: '', // Можно получить из запроса, если нужно
+        }
       });
 
       return offer;
@@ -131,7 +136,7 @@ export class OffersService {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     await this.prisma.exchangeOffer.updateMany({
       where: {
-        status: { in: ['DECLINED', 'EXPIRED'] },
+        status: { in: [TransactionStatus.DECLINED, TransactionStatus.CANCELLED] },
         updatedAt: { lt: cutoff },
       },
       data: { updatedAt: new Date() },
@@ -150,7 +155,7 @@ export class OffersService {
   async rejectOffer(id: string) {
     return this.prisma.exchangeOffer.update({
       where: { id },
-      data: { status: 'DECLINED' },
+      data: { status: TransactionStatus.DECLINED },
       include: {
         transaction: true,
         listing: true,
@@ -161,7 +166,7 @@ export class OffersService {
   async acceptOffer(id: string) {
     return this.prisma.exchangeOffer.update({
       where: { id },
-      data: { status: 'ACCEPTED' },
+      data: { status: TransactionStatus.APPROVED },
       include: {
         transaction: true,
         listing: true,

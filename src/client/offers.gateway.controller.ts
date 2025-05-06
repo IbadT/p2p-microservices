@@ -10,33 +10,47 @@ import { QueueManager } from '../shared/utils/queue.utils';
 import { AuthenticatedRequest } from '../shared/interfaces/request.interface';
 import { offerSchema, responseSchema } from '../shared/schemas/offer.schema';
 import { CreateOfferDto, RespondToOfferDto } from './interfaces/offer.dto';
-import { Offer } from './interfaces/grpc.interfaces';
+import { 
+  Offer, 
+  OfferService, 
+  CreateOfferRequest, 
+  UpdateOfferStatusRequest,
+  ExchangeOffer
+} from './interfaces/grpc.interfaces';
 import { OffersService } from '../offers/offers.service';
+import { BaseGrpcClient } from './base/base.grpc.client';
 
 @ApiTags('Offers')
 @Controller('offers')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-export class OffersGatewayController implements OnModuleInit {
-  private offerService;
+export class OffersGatewayController extends BaseGrpcClient implements OnModuleInit {
+  private offerService: OfferService;
+  
   constructor(
-    @Inject('OFFER_PACKAGE') private client: ClientGrpc,
+    @Inject('OFFER_PACKAGE') protected readonly client: ClientGrpc,
     private readonly p2pClient: P2PGrpcClient,
     private readonly offersService: OffersService
-  ) {}
-  onModuleInit() {
-    this.offerService = this.client.getService('OfferService');
+  ) {
+    super(client, 'OfferService');
   }
+
+  onModuleInit() {
+    this.offerService = this.getService<OfferService>('OfferService');
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @SetMetadata('roles', ['Customer'])
-  create(@Body() dto: any) {
-    return this.offerService.CreateOffer(dto).toPromise();
+  async create(@Body() dto: CreateOfferRequest): Promise<Offer> {
+    return this.callGrpcMethod<Offer>(this.offerService.CreateOffer, dto);
   }
+
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: any) {
-    return this.offerService.UpdateOfferStatus({ id, ...dto }).toPromise();
+  async updateStatus(@Param('id') id: string, @Body() dto: Omit<UpdateOfferStatusRequest, 'id'>): Promise<Offer> {
+    return this.callGrpcMethod<Offer>(this.offerService.UpdateOfferStatus, { id, ...dto });
   }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get offer by ID' })
   @ApiResponse({ status: 200, description: 'Offer retrieved successfully' })
@@ -52,21 +66,32 @@ export class OffersGatewayController implements OnModuleInit {
     const result = await QueueManager.addToQueue('offer', async () => {
       return this.p2pClient.getOffer(id);
     });
-    return result as Offer;
+    if (!result) {
+      throw new BadRequestException('Offer not found');
+    }
+    return this.convertExchangeOfferToOffer(result);
   }
 
   @Post()
   @ApiOperation({ summary: 'Создать предложение обмена' })
   @ApiResponse({ status: 201, description: 'Предложение успешно создано' })
-  async createExchangeOffer(@Body() dto: CreateExchangeOfferDto) {
-    return this.p2pClient.createExchangeOffer(dto);
+  async createExchangeOffer(@Body() dto: CreateExchangeOfferDto): Promise<Offer> {
+    const result = await this.p2pClient.createExchangeOffer(dto);
+    if (!result) {
+      throw new BadRequestException('Failed to create exchange offer');
+    }
+    return this.convertExchangeOfferToOffer(result);
   }
 
   @Post(':id/respond')
   @ApiOperation({ summary: 'Ответить на предложение обмена' })
   @ApiResponse({ status: 200, description: 'Ответ успешно отправлен' })
-  async respondExchangeOffer(@Body() dto: RespondExchangeOfferDto) {
-    return this.p2pClient.respondExchangeOffer(dto);
+  async respondExchangeOffer(@Body() dto: RespondExchangeOfferDto): Promise<Offer> {
+    const result = await this.p2pClient.respondExchangeOffer(dto);
+    if (!result) {
+      throw new BadRequestException('Failed to respond to exchange offer');
+    }
+    return this.convertExchangeOfferToOffer(result);
   }
 
   @Post('create')
@@ -88,7 +113,10 @@ export class OffersGatewayController implements OnModuleInit {
     const result = await QueueManager.addToQueue('offer', async () => {
       return this.p2pClient.createOffer(dto);
     });
-    return result as Offer;
+    if (!result) {
+      throw new BadRequestException('Failed to create offer');
+    }
+    return result;
   }
 
   @Post('respond')
@@ -110,7 +138,10 @@ export class OffersGatewayController implements OnModuleInit {
     const result = await QueueManager.addToQueue('offer', async () => {
       return this.p2pClient.respondToOffer(dto);
     });
-    return result as Offer;
+    if (!result) {
+      throw new BadRequestException('Failed to respond to offer');
+    }
+    return result;
   }
 
   @Post()
@@ -118,41 +149,111 @@ export class OffersGatewayController implements OnModuleInit {
   @ApiResponse({ status: 201, description: 'The offer has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad request.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async createOfferDto(@Req() req: AuthenticatedRequest, @Body() createOfferDto: CreateOfferDto) {
-    return this.offersService.createOffer(req.user.id, {
+  async createOfferDto(@Req() req: AuthenticatedRequest, @Body() createOfferDto: CreateOfferDto): Promise<Offer> {
+    const result = await this.offersService.createOffer(req.user.id, {
       listingId: createOfferDto.toUserId,
       amount: createOfferDto.amount
+    });
+    if (!result) {
+      throw new BadRequestException('Failed to create offer');
+    }
+    return this.convertExchangeOfferToOffer({
+      id: result.id,
+      customerId: req.user.id,
+      listingId: result.listingId,
+      amount: result.amount,
+      exchangeType: 'CRYPTO_TO_FIAT',
+      conditions: '',
+      status: result.status
     });
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all offers' })
   @ApiResponse({ status: 200, description: 'Return all offers.' })
-  async findAll() {
-    return this.offersService.listOffers();
+  async findAll(): Promise<Offer[]> {
+    const results = await this.offersService.listOffers();
+    return results.map(result => this.convertExchangeOfferToOffer({
+      id: result.id,
+      customerId: result.userId,
+      listingId: result.listingId,
+      amount: result.amount,
+      exchangeType: 'CRYPTO_TO_FIAT',
+      conditions: '',
+      status: result.status
+    }));
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get an offer by id' })
   @ApiResponse({ status: 200, description: 'Return the offer.' })
   @ApiResponse({ status: 404, description: 'Offer not found.' })
-  async findOne(@Param('id') id: string) {
-    return this.offersService.findOne(id);
+  async findOne(@Param('id') id: string): Promise<Offer> {
+    const result = await this.offersService.findOne(id);
+    if (!result) {
+      throw new BadRequestException('Offer not found');
+    }
+    return this.convertExchangeOfferToOffer({
+      id: result.id,
+      customerId: result.userId,
+      listingId: result.listingId,
+      amount: result.amount,
+      exchangeType: 'CRYPTO_TO_FIAT',
+      conditions: '',
+      status: result.status
+    });
   }
 
   @Post(':id/accept')
   @ApiOperation({ summary: 'Accept an offer' })
   @ApiResponse({ status: 200, description: 'The offer has been successfully accepted.' })
   @ApiResponse({ status: 404, description: 'Offer not found.' })
-  async accept(@Param('id') id: string) {
-    return this.offersService.acceptOffer(id);
+  async accept(@Param('id') id: string): Promise<Offer> {
+    const result = await this.offersService.acceptOffer(id);
+    if (!result) {
+      throw new BadRequestException('Failed to accept offer');
+    }
+    return this.convertExchangeOfferToOffer({
+      id: result.id,
+      customerId: result.userId,
+      listingId: result.listingId,
+      amount: result.amount,
+      exchangeType: 'CRYPTO_TO_FIAT',
+      conditions: '',
+      status: result.status
+    });
   }
 
   @Post(':id/reject')
   @ApiOperation({ summary: 'Reject an offer' })
   @ApiResponse({ status: 200, description: 'The offer has been successfully rejected.' })
   @ApiResponse({ status: 404, description: 'Offer not found.' })
-  async reject(@Param('id') id: string) {
-    return this.offersService.rejectOffer(id);
+  async reject(@Param('id') id: string): Promise<Offer> {
+    const result = await this.offersService.rejectOffer(id);
+    if (!result) {
+      throw new BadRequestException('Failed to reject offer');
+    }
+    return this.convertExchangeOfferToOffer({
+      id: result.id,
+      customerId: result.userId,
+      listingId: result.listingId,
+      amount: result.amount,
+      exchangeType: 'CRYPTO_TO_FIAT',
+      conditions: '',
+      status: result.status
+    });
+  }
+
+  private convertExchangeOfferToOffer(exchangeOffer: ExchangeOffer): Offer {
+    return {
+      id: exchangeOffer.id,
+      fromUserId: exchangeOffer.customerId,
+      toUserId: exchangeOffer.listingId,
+      amount: exchangeOffer.amount,
+      currency: exchangeOffer.exchangeType,
+      status: exchangeOffer.status as 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 } 

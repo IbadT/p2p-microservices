@@ -5,6 +5,37 @@ import { KafkaService } from 'src/kafka/kafka.service';
 import { PrismaService } from 'src/prisma.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, ScheduledTask, TaskStatus } from '@prisma/client';
+import { NotificationType } from 'src/client/interfaces/enums';
+// import { NotificationType } from 'src/kafka/notification-type.enum';
+
+export type ScheduledTaskData = Prisma.InputJsonValue;
+
+export interface CreateScheduledTaskData {
+  type: string;
+  data: ScheduledTaskData;
+  scheduledAt: Date;
+}
+
+export interface UpdateScheduledTaskData {
+  status?: TaskStatus;
+  data?: ScheduledTaskData;
+  scheduledAt?: Date;
+  executedAt?: Date;
+}
+
+export interface ListScheduledTasksFilters {
+  type?: string;
+  status?: TaskStatus;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListScheduledTasksResult {
+  tasks: ScheduledTask[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 @Injectable()
 export class SchedulerService {
@@ -13,11 +44,7 @@ export class SchedulerService {
     private kafka: KafkaService,
   ) {}
 
-  async createScheduledTask(data: {
-    type: string;
-    data: any;
-    scheduledAt: Date;
-  }) {
+  async createScheduledTask(data: CreateScheduledTaskData): Promise<ScheduledTask> {
     return this.prisma.scheduledTask.create({
       data: {
         type: data.type,
@@ -28,12 +55,7 @@ export class SchedulerService {
     });
   }
 
-  async updateScheduledTask(id: string, data: {
-    status?: TaskStatus;
-    data?: any;
-    scheduledAt?: Date;
-    executedAt?: Date;
-  }) {
+  async updateScheduledTask(id: string, data: UpdateScheduledTaskData): Promise<ScheduledTask> {
     return this.prisma.scheduledTask.update({
       where: { id },
       data: {
@@ -45,18 +67,13 @@ export class SchedulerService {
     });
   }
 
-  async getScheduledTask(id: string) {
+  async getScheduledTask(id: string): Promise<ScheduledTask | null> {
     return this.prisma.scheduledTask.findUnique({
       where: { id },
     });
   }
 
-  async listScheduledTasks(filters: {
-    type?: string;
-    status?: TaskStatus;
-    page?: number;
-    limit?: number;
-  }) {
+  async listScheduledTasks(filters: ListScheduledTasksFilters): Promise<ListScheduledTasksResult> {
     const { type, status, page = 1, limit = 10 } = filters;
     
     const where = {
@@ -82,50 +99,47 @@ export class SchedulerService {
     };
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
-  async handleScheduledTasks() {
-    const tasks = await this.prisma.scheduledTask.findMany({
+  @Cron(CronExpression.EVERY_HOUR)
+  async checkExchangerStatus() {
+    const inactiveThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours
+    const inactiveExchangers = await this.prisma.user.findMany({
       where: {
-        status: TaskStatus.PENDING,
-        scheduledAt: {
-          lte: new Date(),
-        },
+        isExchangerActive: true,
+        updatedAt: { lt: inactiveThreshold }
       },
+      include: {
+        exchangerStatus: true
+      }
     });
 
-    for (const task of tasks) {
+    for (const exchanger of inactiveExchangers) {
       try {
         await this.kafka.sendEvent({
-          type: "exchanger.status.checked",
+          type: NotificationType.EXCHANGER_STATUS_CHECKED,
           payload: {
-            taskId: task.id,
-            type: task.type,
-            data: task.data,
+            exchangerId: exchanger.id,
+            status: exchanger.isExchangerActive
           }
+        });
+
+        await this.prisma.user.update({
+          where: { id: exchanger.id },
+          data: { isExchangerActive: false }
         });
 
         await this.kafka.sendEvent({
-          type: "exchanger.status.frozen",
+          type: NotificationType.EXCHANGER_STATUS_FROZEN,
           payload: {
-            taskId: task.id,
-            type: task.type,
-            data: task.data,
+            exchangerId: exchanger.id,
+            reason: 'Inactive for too long'
           }
-        });
-
-        await this.prisma.scheduledTask.update({
-          where: { id: task.id },
-          data: {
-            status: TaskStatus.COMPLETED,
-            executedAt: new Date(),
-          },
         });
       } catch (error) {
         await this.kafka.sendEvent({
-          type: "scheduler.task.failed",
+          type: NotificationType.SCHEDULER_TASK_FAILED,
           payload: {
-            taskId: task.id,
-            error: error.message,
+            taskId: exchanger.id,
+            error: error instanceof Error ? error.message : 'Unknown error'
           }
         });
       }

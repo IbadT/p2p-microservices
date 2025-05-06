@@ -4,7 +4,16 @@ import { BaseGrpcClient } from '../base/base.grpc.client';
 import { P2P_SERVICE } from '../constants';
 import { CreateExchangeOfferDto, RespondExchangeOfferDto } from '../interfaces/client.swagger';
 import { CreateOfferDto, RespondToOfferDto } from '../interfaces/offer.dto';
-import { Offer } from '../interfaces/grpc.interfaces';
+import { 
+  Offer, 
+  ExchangeOffer, 
+  P2PStats, 
+  ExchangeRates, 
+  ExchangeLimits, 
+  ExchangeFees, 
+  P2PSettings,
+  P2PService as IP2PService
+} from '../interfaces/grpc.interfaces';
 
 @Injectable()
 export class P2PGrpcClient extends BaseGrpcClient {
@@ -19,8 +28,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @param dto - Данные для создания предложения
    * @returns {Promise<ExchangeOffer>} Созданное предложение
    */
-  async createExchangeOffer(dto: CreateExchangeOfferDto) {
-    const service = this.getService<any>('P2PService');
+  async createExchangeOffer(dto: CreateExchangeOfferDto): Promise<ExchangeOffer> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.createExchangeOffer, dto);
   }
 
@@ -29,8 +38,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @param dto - Данные для ответа на предложение
    * @returns {Promise<ExchangeOffer>} Обновленное предложение
    */
-  async respondExchangeOffer(dto: RespondExchangeOfferDto) {
-    const service = this.getService<any>('P2PService');
+  async respondExchangeOffer(dto: RespondExchangeOfferDto): Promise<ExchangeOffer> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.respondExchangeOffer, dto);
   }
 
@@ -39,18 +48,18 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @param id - ID предложения
    * @returns {Promise<ExchangeOffer>} Предложение
    */
-  async getOffer(id: string) {
-    const service = this.getService<any>('P2PService');
+  async getOffer(id: string): Promise<ExchangeOffer> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getOffer, { id });
   }
 
   async createOffer(dto: CreateOfferDto): Promise<Offer> {
-    const service = this.getService<any>('P2PService');
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.createOffer, dto);
   }
 
   async respondToOffer(dto: RespondToOfferDto): Promise<Offer> {
-    const service = this.getService<any>('P2PService');
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.respondToOffer, dto);
   }
 
@@ -58,8 +67,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * Получает статистику P2P
    * @returns {Promise<P2PStats>} Статистика P2P
    */
-  async getStats() {
-    const service = this.getService<any>('P2PService');
+  async getStats(): Promise<P2PStats> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getStats);
   }
 
@@ -67,8 +76,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * Получает курсы валют
    * @returns {Promise<ExchangeRates>} Курсы валют
    */
-  async getExchangeRates() {
-    const service = this.getService<any>('P2PService');
+  async getExchangeRates(): Promise<ExchangeRates> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getExchangeRates);
   }
 
@@ -76,8 +85,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * Получает лимиты для обмена
    * @returns {Promise<ExchangeLimits>} Лимиты для обмена
    */
-  async getExchangeLimits() {
-    const service = this.getService<any>('P2PService');
+  async getExchangeLimits(): Promise<ExchangeLimits> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getExchangeLimits);
   }
 
@@ -85,8 +94,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * Получает комиссии для обмена
    * @returns {Promise<ExchangeFees>} Комиссии для обмена
    */
-  async getExchangeFees() {
-    const service = this.getService<any>('P2PService');
+  async getExchangeFees(): Promise<ExchangeFees> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getExchangeFees);
   }
 
@@ -94,8 +103,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * Получает настройки P2P
    * @returns {Promise<P2PSettings>} Настройки P2P
    */
-  async getSettings() {
-    const service = this.getService<any>('P2PService');
+  async getSettings(): Promise<P2PSettings> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.getSettings);
   }
 
@@ -104,8 +113,8 @@ export class P2PGrpcClient extends BaseGrpcClient {
    * @param settings - Новые настройки
    * @returns {Promise<P2PSettings>} Обновленные настройки
    */
-  async updateSettings(settings: any) {
-    const service = this.getService<any>('P2PService');
+  async updateSettings(settings: Partial<P2PSettings>): Promise<P2PSettings> {
+    const service = this.getService<IP2PService>('P2PService');
     return this.callGrpcMethod(service.updateSettings, settings);
   }
 } 

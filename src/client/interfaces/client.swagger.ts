@@ -1,4 +1,4 @@
-import { ApiProperty, ApiTags } from '@nestjs/swagger';
+import { ApiProperty, ApiTags, ApiExtraModels } from '@nestjs/swagger';
 import { ExchangeType, TransactionStatus, RespondAction, Role } from './enums';
 
 // User Service DTOs
@@ -437,19 +437,64 @@ export class UpdateFilterDto {
   paymentMethods?: string[];
 }
 
-export class PublishEventDto {
-  @ApiProperty({ description: 'Название топика' })
+/**
+ * DTO для публикации событий в Kafka
+ * @template T - Тип данных события
+ */
+export class PublishEventDto<T = unknown> {
+  @ApiProperty()
   topic: string;
 
-  @ApiProperty({ description: 'Ключ события' })
+  @ApiProperty()
   key: string;
 
-  @ApiProperty({ description: 'Данные события' })
-  value: any;
+  @ApiProperty()
+  value: T;
 
-  @ApiProperty({ description: 'Заголовки события' })
+  @ApiProperty({ required: false })
   headers?: Record<string, string>;
 }
+
+/**
+ * Интерфейс для событий, связанных с пользователями
+ */
+export interface UserEvent {
+  userId: string;
+  action: 'created' | 'updated' | 'deleted';
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Интерфейс для событий, связанных с транзакциями
+ */
+export interface TransactionEvent {
+  transactionId: string;
+  status: 'pending' | 'completed' | 'failed';
+  amount: number;
+  currency: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Интерфейс для событий, связанных с обменами
+ */
+export interface ExchangeEvent {
+  exchangeId: string;
+  status: 'created' | 'in_progress' | 'completed' | 'cancelled';
+  type: 'buy' | 'sell';
+  amount: number;
+  cryptocurrency: string;
+  fiatCurrency: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+// Примеры использования:
+// const userEvent = new PublishEventDto<UserEvent>();
+// const transactionEvent = new PublishEventDto<TransactionEvent>();
+// const exchangeEvent = new PublishEventDto<ExchangeEvent>();
 
 export class LoginDto {
   @ApiProperty({ description: 'Email пользователя' })

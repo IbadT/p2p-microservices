@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, Consumer, EachMessagePayload } from 'kafkajs';
+import { NotificationType } from '../client/interfaces/enums';
+
+interface KafkaEvent {
+  type: NotificationType;
+  payload: Record<string, unknown>;
+}
 
 /**
  * Сервис для работы с Kafka
@@ -91,7 +97,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
    * @param event - Объект события с типом и полезной нагрузкой
    * @throws {Error} Если не удалось отправить событие
    */
-  async sendEvent(event: { type: string; payload: any }) {
+  async sendEvent(event: KafkaEvent) {
     if (!event || !event.type || !event.payload) {
       this.logger.error('Invalid event object provided');
       throw new Error('Event must have type and payload');
@@ -117,7 +123,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
    * Подписывается на обновления в Kafka
    * @param callback - Функция обратного вызова для обработки полученных сообщений
    */
-  async subscribeToDealUpdates(callback: (message: unknown) => Promise<void>) {
+  async subscribeToDealUpdates(callback: (message: KafkaEvent) => Promise<void>) {
     if (this.isConsumerRunning) {
       this.logger.warn('Consumer is already running, skipping subscription');
       return;
@@ -132,7 +138,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
             return;
           }
           try {
-            const value = JSON.parse(message.value.toString());
+            const value = JSON.parse(message.value.toString()) as KafkaEvent;
             await callback(value);
           } catch (e) {
             this.logger.error(`Message processing error: ${e.message}`);

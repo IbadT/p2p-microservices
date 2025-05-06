@@ -1,8 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
-import { Prisma, TransactionStatus } from '@prisma/client';
+import { KafkaService } from '../kafka/kafka.service';
+import { Prisma, TransactionStatus, ExchangeTransaction, User, ExchangeListing, ExchangeOffer } from '@prisma/client';
+import { NotificationType } from '../client/interfaces/enums';
+
+export interface ExchangeTransactionWithRelations extends ExchangeTransaction {
+  listing: ExchangeListing;
+  offer: ExchangeOffer | null;
+  customer: Pick<User, 'id' | 'email'>;
+  exchanger: Pick<User, 'id' | 'email'>;
+}
+
+interface TransactionStatusUpdateData {
+  transactionId: string;
+  status: TransactionStatus;
+  paymentProof?: string;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -11,16 +25,9 @@ export class TransactionsService {
     private kafka: KafkaService
   ) {}
 
-  async updateTransactionStatus(
-    transactionId: string,
-    userId: string,
-    data: {
-      status: string;
-      paymentProof?: string;
-    }
-  ) {
+  async updateTransactionStatus(data: TransactionStatusUpdateData): Promise<ExchangeTransaction> {
     const transaction = await this.prisma.exchangeTransaction.findUnique({
-      where: { id: transactionId },
+      where: { id: data.transactionId },
       include: { listing: true },
     });
 
@@ -33,9 +40,9 @@ export class TransactionsService {
 
     // Update transaction status
     const updatedTransaction = await this.prisma.exchangeTransaction.update({
-      where: { id: transactionId },
+      where: { id: data.transactionId },
       data: {
-        status: data.status as TransactionStatus,
+        status: data.status,
         paymentProof: data.paymentProof,
         canCustomerDispute: this.calculateCustomerDisputeAbility(data.status),
         canExchangerDispute: this.calculateExchangerDisputeAbility(data.status),
@@ -43,20 +50,9 @@ export class TransactionsService {
     });
 
     // Emit Kafka event
-    // await this.kafka.emit('exchange.transaction.statusChanged', {
-    //   transaction: updatedTransaction,
-    //   previousStatus: transaction.status,
-    //   newStatus: data.status,
-    //   updatedBy: userId,
-    // });
     await this.kafka.sendEvent({
-      type: "exchange.transaction.statusChanged",
-      payload: {
-        transaction: updatedTransaction,
-        previousStatus: transaction.status,
-        newStatus: data.status,
-        updatedBy: userId,
-      }
+      type: NotificationType.TRANSACTION_STATUS_CHANGED,
+      payload: { transactionId: transaction.id, status: data.status }
     });
 
     // Handle status-specific actions
@@ -65,14 +61,16 @@ export class TransactionsService {
     return updatedTransaction;
   }
 
-  private validateStatusTransition(currentStatus: string, newStatus: string): void {
+  private validateStatusTransition(currentStatus: TransactionStatus, newStatus: TransactionStatus): void {
     const validTransitions = {
-      PENDING_OFFER: ['PENDING_PAYMENT', 'CANCELLED', 'DECLINED'],
-      PENDING_PAYMENT: ['PAYMENT_SENT', 'CANCELLED'],
-      PAYMENT_SENT: ['PAYMENT_CONFIRMED', 'DISPUTED'],
-      PAYMENT_CONFIRMED: ['COMPLETED', 'DISPUTED'],
-      COMPLETED: ['FINISHED'],
-      DISPUTED: ['COMPLETED', 'CANCELLED'],
+      [TransactionStatus.PENDING]: [TransactionStatus.APPROVED, TransactionStatus.DECLINED, TransactionStatus.CANCELLED],
+      [TransactionStatus.APPROVED]: [TransactionStatus.PAYMENT_CONFIRMED, TransactionStatus.CANCELLED],
+      [TransactionStatus.PAYMENT_CONFIRMED]: [TransactionStatus.RECEIPT_CONFIRMED, TransactionStatus.DISPUTE_OPEN],
+      [TransactionStatus.RECEIPT_CONFIRMED]: [TransactionStatus.FINISHED, TransactionStatus.DISPUTE_OPEN],
+      [TransactionStatus.FINISHED]: [],
+      [TransactionStatus.CANCELLED]: [],
+      [TransactionStatus.DISPUTE_OPEN]: [TransactionStatus.DISPUTE_RESOLVED],
+      [TransactionStatus.DISPUTE_RESOLVED]: [TransactionStatus.FINISHED, TransactionStatus.CANCELLED],
     };
 
     if (!validTransitions[currentStatus]?.includes(newStatus)) {
@@ -80,26 +78,22 @@ export class TransactionsService {
     }
   }
 
-  private calculateCustomerDisputeAbility(status: string): boolean {
-    return ['PAYMENT_SENT', 'PAYMENT_CONFIRMED'].includes(status);
+  private calculateCustomerDisputeAbility(status: TransactionStatus): boolean {
+    return status === TransactionStatus.PAYMENT_CONFIRMED || 
+           status === TransactionStatus.RECEIPT_CONFIRMED;
   }
 
-  private calculateExchangerDisputeAbility(status: string): boolean {
-    return ['PAYMENT_SENT', 'PAYMENT_CONFIRMED'].includes(status);
+  private calculateExchangerDisputeAbility(status: TransactionStatus): boolean {
+    return status === TransactionStatus.PAYMENT_CONFIRMED || 
+           status === TransactionStatus.RECEIPT_CONFIRMED;
   }
 
-  private async handleStatusChange(transaction: any): Promise<void> {
+  private async handleStatusChange(transaction: ExchangeTransaction): Promise<void> {
     switch (transaction.status) {
-      case 'COMPLETED':
+      case TransactionStatus.FINISHED:
         // Release crypto to buyer
-        // await this.kafka.emit('balance.transfer', {
-        //   fromUserId: transaction.exchangerId,
-        //   toUserId: transaction.customerId,
-        //   amount: transaction.cryptoAmount,
-        //   cryptocurrency: transaction.cryptocurrency,
-        // });
         await this.kafka.sendEvent({
-          type: "balance.transfer",
+          type: NotificationType.BALANCE_TRANSFER,
           payload: {
             fromUserId: transaction.exchangerId,
             toUserId: transaction.customerId,
@@ -109,21 +103,20 @@ export class TransactionsService {
         });
         break;
 
-      case 'CANCELLED':
-      case 'DECLINED':
+      case TransactionStatus.CANCELLED:
+      case TransactionStatus.DECLINED:
         // Return held funds
-        // await this.kafka.emit('balance.hold.release', {
-        //   transactionId: transaction.id,
-        // });
         await this.kafka.sendEvent({
-          type: "balance.hold.release",
+          type: NotificationType.BALANCE_HOLD_RELEASED,
           payload: {
-            transactionId: transaction.id,
+            userId: transaction.customerId,
+            amount: transaction.cryptoAmount,
+            cryptocurrency: transaction.cryptocurrency,
           }
         });
         break;
 
-      case 'FINISHED':
+      case TransactionStatus.FINISHED:
         // Mark transaction as finished after 24 hours
         await this.prisma.exchangeTransaction.update({
           where: { id: transaction.id },
@@ -132,28 +125,22 @@ export class TransactionsService {
             isActive: false,
           },
         });
-        // await this.kafka.emit('exchange.transaction.finished', { transaction });
         await this.kafka.sendEvent({
-          type: "exchange.transaction.finished",
-          payload: {
-            transaction
-          }
+          type: NotificationType.TRANSACTION_FINISHED,
+          payload: { transactionId: transaction.id }
         });
         break;
     }
   }
 
-  async getActiveExchanges(userId: string) {
+  async getActiveExchanges(userId: string): Promise<ExchangeTransactionWithRelations[]> {
     return this.prisma.exchangeTransaction.findMany({
       where: {
         OR: [
           { customerId: userId },
-          { exchangerId: userId },
+          { exchangerId: userId }
         ],
-        AND: {
-          isActive: true,
-          finishedAt: null,
-        },
+        isActive: true,
       },
       include: {
         listing: true,
@@ -176,11 +163,11 @@ export class TransactionsService {
 
   async updateTransaction(id: string, data: {
     status?: TransactionStatus;
-  }) {
+  }): Promise<ExchangeTransaction> {
     return this.prisma.exchangeTransaction.update({
       where: { id },
       data: {
-        status: data.status as TransactionStatus,
+        status: data.status,
       },
     });
   }

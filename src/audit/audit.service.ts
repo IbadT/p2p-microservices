@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 // import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { PrismaService } from 'src/prisma.service';
+import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class AuditService {
@@ -16,28 +17,27 @@ export class AuditService {
     action: string;
     entityType: string;
     entityId: string;
-    details: string;
-    ipAddress: string;
+    metadata?: Record<string, any>;
   }) {
     const auditLog = await this.prisma.auditLog.create({
-      data,
+      data: {
+        userId: data.userId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        metadata: data.metadata,
+      },
     });
 
-    // await this.kafka.emit('audit.log.created', {
-    //   auditLogId: auditLog.id,
-    //   userId: auditLog.userId,
-    //   action: auditLog.action,
-    //   entityType: auditLog.entityType,
-    //   entityId: auditLog.entityId,
-    // });
     await this.kafka.sendEvent({
-      type: "audit.log.created",
+      type: NotificationType.AUDIT_LOG_CREATED,
       payload: {
         auditLogId: auditLog.id,
-        userId: auditLog.userId,
-        action: auditLog.action,
-        entityType: auditLog.entityType,
-        entityId: auditLog.entityId,
+        userId: data.userId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        metadata: data.metadata,
       }
     });
 

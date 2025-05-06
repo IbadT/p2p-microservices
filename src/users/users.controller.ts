@@ -14,12 +14,12 @@ export class UsersController {
       email: data.email,
       password: data.password,
       role: data.role as UserRole,
-      isExchangerActive: data.isExchanger,
+      isExchanger: data.isExchanger,
     });
   }
 
   @GrpcMethod('UsersService', 'GetUser')
   async getUser(data: GetUserRequest) {
-    return this.usersService.getUserById(data.userId);
+    return this.usersService.getUser(data.userId);
   }
 }

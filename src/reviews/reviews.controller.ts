@@ -12,7 +12,6 @@ export class ReviewsController {
     return this.reviewsService.createReview({
       transactionId: data.transactionId,
       authorId: data.authorId,
-      targetId: data.targetId,
       rating: data.rating,
       comment: data.comment,
     });

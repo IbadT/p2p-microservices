@@ -9,6 +9,7 @@ import { CacheUtils } from '../utils/cache.utils';
 import { Observable } from 'rxjs';
 import { CircuitBreaker } from '../utils/circuit-breaker.utils';
 import { ShutdownManager } from '../utils/shutdown.utils';
+import { User } from '../../client/interfaces/types';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -33,12 +34,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest<TUser = any>(
-    err: any,
-    user: any,
-    info: any,
+  handleRequest<TUser = User>(
+    err: Error | null,
+    user: TUser | null,
+    info: Record<string, unknown>,
     context: ExecutionContext,
-    status?: any,
+    status?: number,
   ): TUser {
     if (err || !user) {
       throw err || new UnauthorizedException();

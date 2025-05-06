@@ -81,6 +81,33 @@ export interface WithdrawRequest {
   amount: number;
 }
 
+export interface GetTransactionHistoryRequest {
+  userId: string;
+  cryptocurrency?: string | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
+}
+
+export interface TransactionHistoryEntry {
+  id: string;
+  userId: string;
+  type: string;
+  cryptocurrency: string;
+  amount: number;
+  relatedTransactionId?: string | undefined;
+  status: string;
+  createdAt: string;
+}
+
+export interface GetTransactionHistoryResponse {
+  transactions: TransactionHistoryEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export const BALANCE_PACKAGE_NAME = "balance";
 
 export interface BalanceServiceClient {
@@ -95,6 +122,11 @@ export interface BalanceServiceClient {
   deposit(request: DepositRequest, metadata?: Metadata): Observable<Balance>;
 
   withdraw(request: WithdrawRequest, metadata?: Metadata): Observable<Balance>;
+
+  getTransactionHistory(
+    request: GetTransactionHistoryRequest,
+    metadata?: Metadata,
+  ): Observable<GetTransactionHistoryResponse>;
 }
 
 export interface BalanceServiceController {
@@ -112,11 +144,24 @@ export interface BalanceServiceController {
   deposit(request: DepositRequest, metadata?: Metadata): Promise<Balance> | Observable<Balance> | Balance;
 
   withdraw(request: WithdrawRequest, metadata?: Metadata): Promise<Balance> | Observable<Balance> | Balance;
+
+  getTransactionHistory(
+    request: GetTransactionHistoryRequest,
+    metadata?: Metadata,
+  ): Promise<GetTransactionHistoryResponse> | Observable<GetTransactionHistoryResponse> | GetTransactionHistoryResponse;
 }
 
 export function BalanceServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["getBalance", "createHold", "releaseHold", "transfer", "deposit", "withdraw"];
+    const grpcMethods: string[] = [
+      "getBalance",
+      "createHold",
+      "releaseHold",
+      "transfer",
+      "deposit",
+      "withdraw",
+      "getTransactionHistory",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("BalanceService", method)(constructor.prototype[method], method, descriptor);

@@ -9,7 +9,7 @@ package p2p;
 
 service P2PExchangeService {
   
-  // 1. Создание Exchange Offer (инициируется Customer’ом)
+  // 1. Создание Exchange Offer (инициируется Customer'ом)
   rpc CreateExchangeOffer (CreateExchangeOfferRequest) returns (CreateExchangeOfferResponse);
 
   // 2. Exchanger отвечает на предложение (принять или отклонить)
@@ -35,6 +35,9 @@ service P2PExchangeService {
 
   // 9. Разрешение спора (административная функция)
   rpc ResolveDispute (ResolveDisputeRequest) returns (ResolveDisputeResponse);
+
+  /** 10. Заморозка Exchanger'а (административная операция) */
+  rpc FreezeExchanger (FreezeExchangerRequest) returns (FreezeExchangerResponse);
 }
 
 
@@ -43,7 +46,7 @@ service P2PExchangeService {
 // Сообщения (Messages)
 // ------------------------------
 
-// 1. Создание Exchange Offer (инициируется Customer’ом)
+// 1. Создание Exchange Offer (инициируется Customer'ом)
 message CreateExchangeOfferRequest {
   string customer_id = 1;          // Идентификатор Customer'а
   string listing_id = 2;           // Идентификатор Exchange Listing (объявления, созданного Exchanger'ом)
@@ -84,7 +87,7 @@ message ConfirmPaymentResponse {
   string message = 3;
 }
 
-// 4. Подтверждение получения фиата Customer’ом
+// 4. Подтверждение получения фиата Customer'ом
 message ConfirmReceiptRequest {
   string offer_id = 1;             // Идентификатор сделки
   string customer_id = 2;
@@ -157,6 +160,18 @@ message ResolveDisputeResponse {
   string dispute_id = 1;
   TransactionStatus status = 2;    // Ожидается DISPUTE_RESOLVED
   string message = 3;
+}
+
+/** 10. Заморозка Exchanger'а */
+message FreezeExchangerRequest {
+  string exchanger_id = 1;  // Идентификатор Exchanger'а
+  string reason = 2;        // Причина заморозки
+}
+
+message FreezeExchangerResponse {
+  string exchanger_id = 1;  // Идентификатор Exchanger'а
+  bool is_frozen = 2;       // Статус заморозки
+  string message = 3;       // Сообщение
 }
 
 

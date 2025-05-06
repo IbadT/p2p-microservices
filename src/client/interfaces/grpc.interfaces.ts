@@ -4,7 +4,9 @@ import { CreateListingDto, OpenDisputeDto } from './client.swagger';
 import { CreateDisputeDto, ResolveDisputeDto, AddCommentDto } from './client.swagger';
 import { CreateReviewDto } from './client.swagger';
 import { GetBalanceDto, CreateHoldDto } from './client.swagger';
+import { CreateOfferDto, RespondToOfferDto } from './offer.dto';
 import { Observable } from 'rxjs';
+import { ExchangeType, PaymentMethod } from '@prisma/client';
 
 export interface User {
   id: string;
@@ -50,15 +52,18 @@ export interface ExchangeOffer {
 export interface Listing {
   id: string;
   userId: string;
-  type: string;
+  type: ExchangeType;
   cryptocurrency: string;
   fiatCurrency: string;
   rate: number;
   minAmount: number;
   maxAmount: number;
   availableAmount: number;
-  paymentMethods: string[];
-  terms?: string;
+  paymentMethods: PaymentMethod[];
+  terms?: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Comment {
@@ -106,20 +111,49 @@ export interface P2PService {
   createExchangeOffer(dto: CreateExchangeOfferDto): Promise<ExchangeOffer>;
   respondExchangeOffer(dto: RespondExchangeOfferDto): Promise<ExchangeOffer>;
   getOffer(id: string): Promise<ExchangeOffer>;
+  createOffer(dto: CreateOfferDto): Promise<Offer>;
+  respondToOffer(dto: RespondToOfferDto): Promise<Offer>;
+  getStats(): Promise<P2PStats>;
+  getExchangeRates(): Promise<ExchangeRates>;
+  getExchangeLimits(): Promise<ExchangeLimits>;
+  getExchangeFees(): Promise<ExchangeFees>;
+  getSettings(): Promise<P2PSettings>;
+  updateSettings(settings: Partial<P2PSettings>): Promise<P2PSettings>;
+}
+
+export interface Exchange {
+  id: string;
+  listingId: string;
+  customerId: string;
+  exchangerId: string;
+  amount: number;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ExchangeService {
-  createListing(data: any): Observable<any>;
-  getListings(data: any): Observable<any>;
-  createOffer(data: any): Observable<any>;
-  respondOffer(data: any): Observable<any>;
-  updateTransactionStatus(data: any): Observable<any>;
-  getActiveExchanges(data: any): Observable<any>;
-  confirmPayment(data: any): Observable<any>;
-  confirmReceipt(data: any): Observable<any>;
-  cancelTransaction(data: any): Observable<any>;
-  setExchangerStatus(data: any): Observable<any>;
-  freezeExchanger(data: any): Observable<any>;
+  ListActiveExchanges(filters: {
+    userId?: string;
+    status?: string;
+    type?: ExchangeType;
+  }): Observable<Exchange[]>;
+  
+  ConfirmStep(data: {
+    id: string;
+    step: 'PAYMENT' | 'RECEIPT';
+    evidence?: string;
+  }): Observable<Exchange>;
+  
+  OpenDispute(data: {
+    exchangeId: string;
+    reason: string;
+    evidence?: string[];
+  }): Observable<Dispute>;
+  
+  CreateListing(data: CreateListingDto): Observable<Listing>;
+  
+  GetExchange(data: { id: string }): Observable<Exchange>;
 }
 
 export interface DisputeService {
@@ -276,11 +310,93 @@ export interface AuthService {
   validateToken(data: any): Observable<any>;
 }
 
-export interface P2PService {
-  getStats(data: any): Observable<any>;
-  getExchangeRates(data: any): Observable<any>;
-  getExchangeLimits(data: any): Observable<any>;
-  getExchangeFees(data: any): Observable<any>;
-  getSettings(data: any): Observable<any>;
-  updateSettings(data: any): Observable<any>;
+export interface P2PStats {
+  totalTransactions: number;
+  activeUsers: number;
+  totalVolume: number;
+  successRate: number;
+  averageRating: number;
+}
+
+export interface ExchangeRates {
+  rates: {
+    [currency: string]: {
+      buy: number;
+      sell: number;
+      lastUpdate: string;
+    };
+  };
+}
+
+export interface ExchangeLimits {
+  minAmount: number;
+  maxAmount: number;
+  dailyLimit: number;
+  monthlyLimit: number;
+  verificationRequired: boolean;
+}
+
+export interface ExchangeFees {
+  makerFee: number;
+  takerFee: number;
+  withdrawalFee: number;
+  depositFee: number;
+}
+
+export interface P2PSettings {
+  enabled: boolean;
+  maintenanceMode: boolean;
+  allowedCryptocurrencies: string[];
+  allowedFiatCurrencies: string[];
+  allowedPaymentMethods: string[];
+  minRating: number;
+  maxActiveListings: number;
+  maxActiveOffers: number;
+  disputeTimeout: number;
+  paymentTimeout: number;
+}
+
+export interface OfferService {
+  CreateOffer(data: CreateOfferRequest): Observable<Offer>;
+  UpdateOfferStatus(data: UpdateOfferStatusRequest): Observable<Offer>;
+  GetOffer(data: { id: string }): Observable<Offer>;
+  ListOffers(data: { userId?: string }): Observable<Offer[]>;
+  AcceptOffer(data: { id: string }): Observable<Offer>;
+  RejectOffer(data: { id: string }): Observable<Offer>;
+}
+
+export interface CreateOfferRequest {
+  listingId: string;
+  amount: number;
+  conditions?: string;
+}
+
+export interface UpdateOfferStatusRequest {
+  id: string;
+  status: 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
+  reason?: string;
+}
+
+export interface ListingService {
+  CreateListing(data: CreateListingDto): Observable<Listing>;
+  ListListings(filters: {
+    type?: ExchangeType;
+    cryptocurrency?: string;
+    fiatCurrency?: string;
+    minRate?: number;
+    maxRate?: number;
+    paymentMethods?: PaymentMethod[];
+    isActive?: boolean;
+  }): Observable<Listing[]>;
+  GetListing(data: { id: string }): Observable<Listing>;
+  UpdateListing(data: { id: string; isActive: boolean }): Observable<Listing>;
+  DeleteListing(data: { id: string }): Observable<void>;
+}
+
+export interface GrpcMethod<TRequest = unknown, TResponse = unknown> {
+  (request: TRequest): Observable<TResponse>;
+}
+
+export interface GrpcService {
+  [key: string]: GrpcMethod;
 } 

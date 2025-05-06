@@ -54,6 +54,36 @@ export interface Review {
   updatedAt: string;
 }
 
+export interface GetReviewStatsRequest {
+  userId: string;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+}
+
+export interface ReviewStats {
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: { [key: number]: number };
+  positivePercentage: number;
+  negativePercentage: number;
+  neutralPercentage: number;
+  recentComments: string[];
+  totalExchanges: number;
+  reviewRate: number;
+}
+
+export interface ReviewStats_RatingDistributionEntry {
+  key: number;
+  value: number;
+}
+
+export interface GetReviewStatsResponse {
+  stats: ReviewStats | undefined;
+  userId: string;
+  periodStart: string;
+  periodEnd: string;
+}
+
 export const REVIEWS_PACKAGE_NAME = "reviews";
 
 export interface ReviewsServiceClient {
@@ -64,6 +94,8 @@ export interface ReviewsServiceClient {
   getReview(request: GetReviewRequest, metadata?: Metadata): Observable<Review>;
 
   getUserReviews(request: GetUserReviewsRequest, metadata?: Metadata): Observable<ReviewsResponse>;
+
+  getReviewStats(request: GetReviewStatsRequest, metadata?: Metadata): Observable<GetReviewStatsResponse>;
 }
 
 export interface ReviewsServiceController {
@@ -77,11 +109,16 @@ export interface ReviewsServiceController {
     request: GetUserReviewsRequest,
     metadata?: Metadata,
   ): Promise<ReviewsResponse> | Observable<ReviewsResponse> | ReviewsResponse;
+
+  getReviewStats(
+    request: GetReviewStatsRequest,
+    metadata?: Metadata,
+  ): Promise<GetReviewStatsResponse> | Observable<GetReviewStatsResponse> | GetReviewStatsResponse;
 }
 
 export function ReviewsServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["createReview", "updateReview", "getReview", "getUserReviews"];
+    const grpcMethods: string[] = ["createReview", "updateReview", "getReview", "getUserReviews", "getReviewStats"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("ReviewsService", method)(constructor.prototype[method], method, descriptor);

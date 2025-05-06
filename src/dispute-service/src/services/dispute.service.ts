@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 // import { KafkaService } from '../kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { PrismaService } from 'src/prisma.service';
+import { NotificationType } from '../../../client/interfaces/enums';
 
 @Injectable()
 export class DisputeService {
@@ -54,13 +55,17 @@ export class DisputeService {
 
       // Create hold on funds if necessary
       await this.kafka.sendEvent({
-        type: "balance.hold.create",
+        type: NotificationType.BALANCE_HOLD_CREATED,
         payload: {
           userId: transaction.exchangerId,
           amount: transaction.cryptoAmount,
-          type: 'DISPUTE',
-          relatedTransactionId: transactionId,
+          cryptocurrency: transaction.cryptocurrency,
         }
+      });
+
+      await this.kafka.sendEvent({
+        type: NotificationType.DISPUTE,
+        payload: { disputeId: dispute.id }
       });
 
       return dispute;
@@ -111,7 +116,7 @@ export class DisputeService {
       // Transfer or return funds based on resolution
       if (winnerUserId === dispute.transaction.customerId) {
         await this.kafka.sendEvent({
-          type: "balance.transfer",
+          type: NotificationType.BALANCE_TRANSFER,
           payload: {
             fromUserId: dispute.transaction.exchangerId,
             toUserId: dispute.transaction.customerId,
@@ -121,12 +126,29 @@ export class DisputeService {
         });
       } else {
         await this.kafka.sendEvent({
-          type: "balance.hold.release",
+          type: NotificationType.BALANCE_HOLD_RELEASED,
           payload: {
-            transactionId: dispute.transactionId,
+            userId: dispute.transaction.exchangerId,
+            amount: dispute.transaction.cryptoAmount,
+            cryptocurrency: dispute.transaction.cryptocurrency,
           }
         });
       }
+
+      await this.kafka.sendEvent({
+        type: NotificationType.DISPUTE_COMMENT_ADDED,
+        payload: { disputeId, commentId: null }
+      });
+
+      await this.kafka.sendEvent({
+        type: NotificationType.DISPUTE_STATUS_CHANGED,
+        payload: { disputeId, status: 'RESOLVED' }
+      });
+
+      await this.kafka.sendEvent({
+        type: NotificationType.DISPUTE_RESOLUTION_ADDED,
+        payload: { disputeId, resolution }
+      });
     });
   }
 
@@ -198,12 +220,8 @@ export class DisputeService {
     comment: string
   ) {
     await this.kafka.sendEvent({
-      type: "dispute.comment.added",
-      payload: {
-        disputeId,
-        moderatorId,
-        comment,
-      }
+      type: NotificationType.DISPUTE_COMMENT_ADDED,
+      payload: { disputeId, commentId: null }
     });
   }
 
@@ -212,11 +230,8 @@ export class DisputeService {
     newStatus: string
   ) {
     await this.kafka.sendEvent({
-      type: "dispute.status.changed",
-      payload: {
-        disputeId,
-        newStatus,
-      }
+      type: NotificationType.DISPUTE_STATUS_CHANGED,
+      payload: { disputeId, status: newStatus }
     });
   }
 
@@ -226,12 +241,8 @@ export class DisputeService {
     resolution: string
   ) {
     await this.kafka.sendEvent({
-      type: "dispute.resolution.added",
-      payload: {
-        disputeId,
-        moderatorId,
-        resolution,
-      }
+      type: NotificationType.DISPUTE_RESOLUTION_ADDED,
+      payload: { disputeId, resolution }
     });
   }
 } 

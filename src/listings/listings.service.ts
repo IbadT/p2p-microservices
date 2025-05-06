@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaService } from '../kafka/kafka.service';
 // import { ExchangeType, PaymentMethod, Prisma } from '../../generated/prisma';
 import { ExchangeType, PaymentMethod, Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
+import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class ListingsService {
@@ -42,7 +43,7 @@ export class ListingsService {
     //   userId,
     // });
     await this.kafka.sendEvent({
-      type: "exchange.listing.statusChanged",
+      type: NotificationType.LISTING_STATUS_CHANGED,
       payload: {
         listing,
         userId,
@@ -92,20 +93,19 @@ export class ListingsService {
   async updateListingStatus(listingId: string, isActive: boolean) {
     const listing = await this.prisma.exchangeListing.update({
       where: { id: listingId },
-      data: { isActive },
+      data: { isActive }
     });
 
-    // Emit Kafka event
-    // await this.kafka.emit('exchange.listing.statusChanged', {
-    //   listingId,
-    //   isActive,
-    // });
     await this.kafka.sendEvent({
-      type: "exchange.listing.statusChanged",
+      type: NotificationType.LISTING_STATUS_CHANGED,
       payload: {
-        listingId,
-        isActive,
+        listing,
+        userId: listing.userId,
       }
+    });
+
+    this.notificationsGateway.notifyUser(listing.userId, NotificationType.LISTING_STATUS_CHANGED, { 
+      listingId: listing.id 
     });
 
     return listing;
@@ -113,18 +113,16 @@ export class ListingsService {
 
   async deleteListing(listingId: string) {
     const listing = await this.prisma.exchangeListing.delete({
-      where: { id: listingId },
+      where: { id: listingId }
     });
 
-    // Emit Kafka event
-    // await this.kafka.emit('exchange.listing.deleted', {
-    //   listingId,
-    // });
     await this.kafka.sendEvent({
-      type: "exchange.listing.deleted",
-      payload: {
-        listingId
-      }
+      type: NotificationType.LISTING_DELETED,
+      payload: { listingId: listing.id }
+    });
+
+    this.notificationsGateway.notifyUser(listing.userId, NotificationType.LISTING_DELETED, { 
+      listingId: listing.id 
     });
 
     return listing;
@@ -145,10 +143,12 @@ export class ListingsService {
         data: { isActive: false },
       });
       await this.kafka.sendEvent({
-        type: 'exchange.listing.deactivated',
-        payload: { listingId: listing.id },
+        type: NotificationType.LISTING_DEACTIVATED,
+        payload: { listingId: listing.id }
       });
-      this.notificationsGateway.notifyUser(listing.userId, 'listing.deactivated', { listingId: listing.id });
+      this.notificationsGateway.notifyUser(listing.userId, NotificationType.LISTING_DEACTIVATED, { 
+        listingId: listing.id 
+      });
       await this.auditService.createAuditLog({
         userId: listing.userId,
         action: 'DEACTIVATE_LISTING',
@@ -158,5 +158,23 @@ export class ListingsService {
         ipAddress: '',
       });
     }
+  }
+
+  async deactivateListing(listingId: string) {
+    const listing = await this.prisma.exchangeListing.update({
+      where: { id: listingId },
+      data: { isActive: false }
+    });
+
+    await this.kafka.sendEvent({
+      type: NotificationType.LISTING_DEACTIVATED,
+      payload: { listingId: listing.id }
+    });
+
+    this.notificationsGateway.notifyUser(listing.userId, NotificationType.LISTING_DEACTIVATED, { 
+      listingId: listing.id 
+    });
+
+    return listing;
   }
 }

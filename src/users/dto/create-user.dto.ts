@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsEnum, IsOptional, IsBoolean } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class CreateUserDto {
@@ -16,6 +16,8 @@ export class CreateUserDto {
   @IsOptional()
   role?: UserRole;
 
+  @ApiProperty({ description: 'Whether the user is an exchanger', required: false })
+  @IsBoolean()
   @IsOptional()
-  isExchangerActive?: boolean;
+  isExchanger?: boolean;
 }

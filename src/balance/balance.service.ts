@@ -5,6 +5,7 @@ import { KafkaService } from 'src/kafka/kafka.service';
 import { PrismaService } from 'src/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CryptoBalance, HoldAmount, UserBalanceData } from '../types/balance.types';
+import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class BalanceService {
@@ -32,10 +33,25 @@ export class BalanceService {
   }
 
   async updateBalance(userId: string, data: Prisma.UserBalanceUpdateInput) {
-    return this.prisma.userBalance.update({
+    const updatedBalance = await this.prisma.userBalance.update({
       where: { userId },
       data,
     });
+
+    if (data.cryptoBalance && typeof data.cryptoBalance === 'object') {
+      const cryptoBalance = data.cryptoBalance as CryptoBalance;
+      await this.kafka.sendEvent({
+        type: NotificationType.BALANCE_UPDATED,
+        payload: {
+          userId,
+          cryptocurrency: cryptoBalance.cryptocurrency,
+          newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptoBalance.cryptocurrency],
+          change: cryptoBalance.amount,
+        }
+      });
+    }
+
+    return updatedBalance;
   }
 
   async createTransaction(data: Prisma.ExchangeTransactionCreateInput) {
@@ -100,17 +116,16 @@ export class BalanceService {
 
       // Emit Kafka event
       await this.kafka.sendEvent({
-        type: "balance.hold.created",
+        type: NotificationType.BALANCE_HOLD_CREATED,
         payload: {
           userId,
           amount,
-          type,
-          transactionId: relatedTransactionId,
+          currency: cryptocurrency,
+          holdId: hold.id
         }
       });
-
       return hold;
-    });
+    })
   }
 
   async releaseHold(holdId: string) {
@@ -146,12 +161,12 @@ export class BalanceService {
 
       // Emit Kafka event
       await this.kafka.sendEvent({
-        type: "balance.hold.released",
+        type: NotificationType.BALANCE_HOLD_RELEASED,
         payload: {
           userId: hold.userId,
           amount: hold.amount,
-          type: hold.type,
-          transactionId: hold.relatedTransactionId,
+          currency: hold.cryptocurrency,
+          holdId: hold.id
         }
       });
     });
@@ -206,13 +221,12 @@ export class BalanceService {
 
       // Emit Kafka event
       await this.kafka.sendEvent({
-        type: "balance.transfer.completed",
+        type: NotificationType.BALANCE_TRANSFER_COMPLETED,
         payload: {
           fromUserId,
           toUserId,
           amount,
-          cryptocurrency,
-          transactionId,
+          currency: cryptocurrency,
         }
       });
     });
@@ -235,7 +249,7 @@ export class BalanceService {
     });
 
     await this.kafka.sendEvent({
-      type: "balance.updated",
+      type: NotificationType.BALANCE_UPDATED,
       payload: {
         userId,
         cryptocurrency,
@@ -270,7 +284,7 @@ export class BalanceService {
       });
 
       await this.kafka.sendEvent({
-        type: "balance.updated",
+        type: NotificationType.BALANCE_UPDATED,
         payload: {
           userId,
           cryptocurrency,
@@ -281,5 +295,41 @@ export class BalanceService {
 
       return updatedBalance;
     });
+  }
+
+  async transferBalance(fromUserId: string, toUserId: string, amount: number, cryptocurrency: string) {
+    // Update balances directly since we don't have a balanceTransfer model
+    await this.prisma.userBalance.update({
+      where: { userId: fromUserId },
+      data: {
+        cryptoBalance: {
+          update: {
+            [cryptocurrency]: {
+              decrement: amount
+            }
+          }
+        }
+      }
+    });
+
+    await this.prisma.userBalance.update({
+      where: { userId: toUserId },
+      data: {
+        cryptoBalance: {
+          update: {
+            [cryptocurrency]: {
+              increment: amount
+            }
+          }
+        }
+      }
+    });
+
+    await this.kafka.sendEvent({
+      type: NotificationType.BALANCE_TRANSFER,
+      payload: { fromUserId, toUserId, amount, cryptocurrency }
+    });
+
+    return { fromUserId, toUserId, amount, cryptocurrency };
   }
 }

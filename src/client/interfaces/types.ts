@@ -1,7 +1,9 @@
+import { UserRole, TransactionStatus, TransactionType, NotificationType, AuditAction, EntityType, HoldType, ListingType, OfferStatus, FilterType } from './enums';
+
 export interface User {
   id: string;
   email: string;
-  role: string;
+  role: UserRole;
   isExchangerActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -21,6 +23,7 @@ export interface Hold {
   userId: string;
   cryptocurrency: string;
   amount: number;
+  type: HoldType;
   reason: string;
   createdAt: string;
   updatedAt: string;
@@ -31,7 +34,7 @@ export interface Dispute {
   transactionId: string;
   customerId: string;
   exchangerId: string;
-  status: string;
+  status: TransactionStatus;
   reason: string;
   resolution?: string;
   createdAt: string;
@@ -52,17 +55,17 @@ export interface Review {
 export interface AuditLog {
   id: string;
   userId: string;
-  action: string;
-  entityType: string;
+  action: AuditAction;
+  entityType: EntityType;
   entityId: string;
-  details: any;
+  details: Record<string, unknown>;
   createdAt: string;
 }
 
 export interface ScheduledTask {
   id: string;
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   schedule: string;
   enabled: boolean;
   createdAt: string;
@@ -73,8 +76,8 @@ export interface ScheduledTask {
 export interface Notification {
   id: string;
   userId: string;
-  type: string;
-  data: any;
+  type: NotificationType;
+  data: Record<string, unknown>;
   isRead: boolean;
   createdAt: string;
   updatedAt: string;
@@ -82,8 +85,8 @@ export interface Notification {
 
 export interface Transaction {
   id: string;
-  type: string;
-  status: string;
+  type: TransactionType;
+  status: TransactionStatus;
   cryptocurrency: string;
   fiatCurrency: string;
   cryptoAmount: number;
@@ -105,7 +108,7 @@ export interface Transaction {
 
 export interface Listing {
   id: string;
-  type: string;
+  type: ListingType;
   cryptocurrency: string;
   fiatCurrency: string;
   rate: number;
@@ -123,7 +126,7 @@ export interface Listing {
 export interface Offer {
   id: string;
   amount: number;
-  status: string;
+  status: OfferStatus;
   userId: string;
   listingId: string;
   createdAt: string;
@@ -133,7 +136,7 @@ export interface Offer {
 export interface Filter {
   id: string;
   userId: string;
-  type: string;
+  type: FilterType;
   cryptocurrency?: string;
   fiatCurrency?: string;
   minAmount?: number;

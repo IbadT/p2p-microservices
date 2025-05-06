@@ -1,16 +1,17 @@
 import { User, Balance, Hold, Dispute, Review, AuditLog, ScheduledTask, Notification, Transaction, Listing, Offer, Filter, ExchangeRates, ExchangeLimits, ExchangeFees, P2PSettings, P2PStats } from './types';
+import { UserRole, TransactionStatus, TransactionType, NotificationType, AuditAction, EntityType, HoldType, ListingType, OfferStatus, FilterType } from './enums';
 
 // User DTOs
 export interface CreateUserDto {
   email: string;
   password: string;
-  role: string;
+  role: UserRole;
 }
 
 export interface UpdateUserDto {
   email?: string;
   password?: string;
-  role?: string;
+  role?: UserRole;
   isExchangerActive?: boolean;
 }
 
@@ -29,6 +30,7 @@ export interface CreateHoldDto {
   userId: string;
   cryptocurrency: string;
   amount: number;
+  type: HoldType;
   reason: string;
 }
 
@@ -43,7 +45,7 @@ export interface CreateDisputeDto {
 export interface ResolveDisputeDto {
   disputeId: string;
   resolution: string;
-  status: string;
+  status: TransactionStatus;
 }
 
 // Review DTOs
@@ -62,22 +64,22 @@ export interface UpdateReviewDto {
 // Audit DTOs
 export interface CreateAuditLogDto {
   userId: string;
-  action: string;
-  entityType: string;
+  action: AuditAction;
+  entityType: EntityType;
   entityId: string;
-  details: any;
+  details: Record<string, unknown>;
 }
 
 // Scheduler DTOs
 export interface CreateScheduledTaskDto {
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   schedule: string;
   enabled: boolean;
 }
 
 export interface UpdateScheduledTaskDto {
-  data?: any;
+  data?: Record<string, unknown>;
   schedule?: string;
   enabled?: boolean;
 }
@@ -85,13 +87,13 @@ export interface UpdateScheduledTaskDto {
 // Notification DTOs
 export interface CreateNotificationDto {
   userId: string;
-  type: string;
-  data: any;
+  type: NotificationType;
+  data: Record<string, unknown>;
 }
 
 // Transaction DTOs
 export interface CreateTransactionDto {
-  type: string;
+  type: TransactionType;
   cryptocurrency: string;
   fiatCurrency: string;
   cryptoAmount: number;
@@ -103,14 +105,14 @@ export interface CreateTransactionDto {
 }
 
 export interface UpdateTransactionDto {
-  status?: string;
+  status?: TransactionStatus;
   paymentProof?: string;
   isActive?: boolean;
 }
 
 // Listing DTOs
 export interface CreateListingDto {
-  type: string;
+  type: ListingType;
   cryptocurrency: string;
   fiatCurrency: string;
   rate: number;
@@ -140,19 +142,28 @@ export interface CreateOfferDto {
 }
 
 export interface UpdateOfferDto {
-  status?: string;
+  status?: OfferStatus;
   amount?: number;
 }
 
 // Filter DTOs
 export interface CreateFilterDto {
   userId: string;
-  type: string;
+  type: FilterType;
   cryptocurrency?: string;
   fiatCurrency?: string;
   minAmount?: number;
   maxAmount?: number;
   paymentMethods?: string[];
+}
+
+// User Status DTOs
+export interface SetOnlineDto {
+  isOnline: boolean;
+}
+
+export interface UnfreezeDto {
+  reason: string;
 }
 
 // Response DTOs

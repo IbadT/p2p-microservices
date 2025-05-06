@@ -65,7 +65,7 @@ export enum Role {
   UNRECOGNIZED = -1,
 }
 
-/** 1. Создание Exchange Offer (инициируется Customer’ом) */
+/** 1. Создание Exchange Offer (инициируется Customer'ом) */
 export interface CreateExchangeOfferRequest {
   /** Идентификатор Customer'а */
   customerId: string;
@@ -122,7 +122,7 @@ export interface ConfirmPaymentResponse {
   message: string;
 }
 
-/** 4. Подтверждение получения фиата Customer’ом */
+/** 4. Подтверждение получения фиата Customer'ом */
 export interface ConfirmReceiptRequest {
   /** Идентификатор сделки */
   offerId: string;
@@ -213,10 +213,27 @@ export interface ResolveDisputeResponse {
   message: string;
 }
 
+/** 10. Заморозка Exchanger'а */
+export interface FreezeExchangerRequest {
+  /** Идентификатор Exchanger'а */
+  exchangerId: string;
+  /** Причина заморозки */
+  reason: string;
+}
+
+export interface FreezeExchangerResponse {
+  /** Идентификатор Exchanger'а */
+  exchangerId: string;
+  /** Статус заморозки */
+  isFrozen: boolean;
+  /** Сообщение */
+  message: string;
+}
+
 export const P2P_PACKAGE_NAME = "p2p";
 
 export interface P2PExchangeServiceClient {
-  /** 1. Создание Exchange Offer (инициируется Customer’ом) */
+  /** 1. Создание Exchange Offer (инициируется Customer'ом) */
 
   createExchangeOffer(
     request: CreateExchangeOfferRequest,
@@ -257,10 +274,14 @@ export interface P2PExchangeServiceClient {
   /** 9. Разрешение спора (административная функция) */
 
   resolveDispute(request: ResolveDisputeRequest, metadata?: Metadata): Observable<ResolveDisputeResponse>;
+
+  /** 10. Заморозка Exchanger'а (административная операция) */
+
+  freezeExchanger(request: FreezeExchangerRequest, metadata?: Metadata): Observable<FreezeExchangerResponse>;
 }
 
 export interface P2PExchangeServiceController {
-  /** 1. Создание Exchange Offer (инициируется Customer’ом) */
+  /** 1. Создание Exchange Offer (инициируется Customer'ом) */
 
   createExchangeOffer(
     request: CreateExchangeOfferRequest,
@@ -322,6 +343,13 @@ export interface P2PExchangeServiceController {
     request: ResolveDisputeRequest,
     metadata?: Metadata,
   ): Promise<ResolveDisputeResponse> | Observable<ResolveDisputeResponse> | ResolveDisputeResponse;
+
+  /** 10. Заморозка Exchanger'а (административная операция) */
+
+  freezeExchanger(
+    request: FreezeExchangerRequest,
+    metadata?: Metadata,
+  ): Promise<FreezeExchangerResponse> | Observable<FreezeExchangerResponse> | FreezeExchangerResponse;
 }
 
 export function P2PExchangeServiceControllerMethods() {
@@ -336,6 +364,7 @@ export function P2PExchangeServiceControllerMethods() {
       "setExchangerStatus",
       "cancelTransaction",
       "resolveDispute",
+      "freezeExchanger",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

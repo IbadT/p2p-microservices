@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionStatus, DisputeStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
+import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class DisputesService {
@@ -18,31 +19,31 @@ export class DisputesService {
 
   @Cron(CronExpression.EVERY_HOUR)
   async archiveOldDisputes() {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - 24);
+
     const disputes = await this.prisma.dispute.findMany({
       where: {
-        status: 'RESOLVED',
-        updatedAt: { lt: cutoff },
-        // isActive: true, // если есть поле
-      },
+        status: DisputeStatus.RESOLVED,
+        updatedAt: {
+          lt: cutoffDate
+        }
+      }
     });
+
     for (const dispute of disputes) {
-      // await this.prisma.dispute.update({
-      //   where: { id: dispute.id },
-      //   data: { isActive: false },
-      // });
-      await this.kafka.sendEvent({
-        type: 'dispute.archived',
-        payload: { disputeId: dispute.id },
+      await this.prisma.dispute.update({
+        where: { id: dispute.id },
+        data: { status: DisputeStatus.RESOLVED }
       });
-      this.notificationsGateway.notifyUser(dispute.initiatorId, 'dispute.archived', { disputeId: dispute.id });
-      await this.auditService.createAuditLog({
-        userId: dispute.initiatorId,
-        action: 'ARCHIVE_DISPUTE',
-        entityType: 'Dispute',
-        entityId: dispute.id,
-        details: JSON.stringify({ reason: 'TTL' }),
-        ipAddress: '',
+
+      await this.kafka.sendEvent({
+        type: NotificationType.DISPUTE_ARCHIVED,
+        payload: { disputeId: dispute.id }
+      });
+
+      this.notificationsGateway.notifyUser(dispute.initiatorId, NotificationType.DISPUTE_ARCHIVED, { 
+        disputeId: dispute.id 
       });
     }
   }
@@ -50,7 +51,7 @@ export class DisputesService {
   async createDispute(
     transactionId: string,
     initiatorId: string,
-    reason: string
+    reason: string,
   ) {
     const transaction = await this.prisma.exchangeTransaction.findUnique({
       where: { id: transactionId },
@@ -69,43 +70,37 @@ export class DisputesService {
         transactionId,
         initiatorId,
         reason,
-        status: 'OPEN',
-      },
+        status: DisputeStatus.OPEN
+      }
     });
 
     // Update transaction status
     await this.prisma.exchangeTransaction.update({
       where: { id: transactionId },
       data: {
-        status: 'DISPUTED',
+        status: TransactionStatus.DISPUTE_OPEN,
         disputeId: dispute.id,
       },
     });
 
     // Emit Kafka event
-    // await this.kafka.emit('dispute.created', {
-    //   dispute,
-    //   transactionId,
-    //   initiatorId,
-    // });
     await this.kafka.sendEvent({
-      type: "dispute.created",
-      payload: {
-        dispute,
-        transactionId,
-        initiatorId,
-      }
-    })
+      type: NotificationType.DISPUTE_CREATED,
+      payload: { disputeId: dispute.id }
+    });
 
-    this.notificationsGateway.notifyUser(initiatorId, 'dispute.created', { disputeId: dispute.id });
+    this.notificationsGateway.notifyUser(initiatorId, NotificationType.DISPUTE_CREATED, { 
+      disputeId: dispute.id 
+    });
+
     await this.auditService.createAuditLog({
       userId: initiatorId,
       action: 'CREATE_DISPUTE',
       entityType: 'Dispute',
       entityId: dispute.id,
-      details: JSON.stringify({ transactionId, reason }),
-      ipAddress: '',
+      metadata: { transactionId, reason }
     });
+
     return dispute;
   }
 
@@ -131,7 +126,7 @@ export class DisputesService {
     const resolvedDispute = await this.prisma.dispute.update({
       where: { id: disputeId },
       data: {
-        status: 'RESOLVED',
+        status: DisputeStatus.RESOLVED,
         resolution,
         moderatorId,
         resolvedAt: new Date(),
@@ -142,34 +137,28 @@ export class DisputesService {
     await this.prisma.exchangeTransaction.update({
       where: { id: dispute.transactionId },
       data: {
-        status: winnerUserId === dispute.transaction.customerId ? 'COMPLETED' : 'CANCELLED',
+        status: winnerUserId === dispute.transaction.customerId ? TransactionStatus.FINISHED : TransactionStatus.CANCELLED,
       },
     });
 
     // Emit Kafka event
-    // await this.kafka.emit('dispute.resolved', {
-    //   dispute: resolvedDispute,
-    //   winnerUserId,
-    //   moderatorId,
-    // });
     await this.kafka.sendEvent({
-      type: "dispute.resolved",
-      payload: {
-        dispute: resolvedDispute,
-        winnerUserId,
-        moderatorId,
-      }
-    })
+      type: NotificationType.DISPUTE_RESOLVED,
+      payload: { disputeId: resolvedDispute.id }
+    });
 
-    this.notificationsGateway.notifyUser(winnerUserId, 'dispute.resolved', { disputeId });
+    this.notificationsGateway.notifyUser(winnerUserId, NotificationType.DISPUTE_RESOLVED, { 
+      disputeId: resolvedDispute.id 
+    });
+
     await this.auditService.createAuditLog({
       userId: moderatorId,
       action: 'RESOLVE_DISPUTE',
       entityType: 'Dispute',
       entityId: disputeId,
-      details: JSON.stringify({ resolution, winnerUserId }),
-      ipAddress: '',
+      metadata: { resolution, winnerUserId }
     });
+
     return resolvedDispute;
   }
 
@@ -197,7 +186,7 @@ export class DisputesService {
   async getOpenDisputes() {
     return this.prisma.dispute.findMany({
       where: {
-        status: 'OPEN',
+        status: DisputeStatus.OPEN,
       },
       include: {
         transaction: true,

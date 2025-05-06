@@ -96,6 +96,13 @@ import {
   Role
 } from '../../proto/generated/p2p.pb';
 
+// DTOs
+import { CreateReviewDto, UpdateReviewDto } from './dto';
+import { CreateDisputeDto, ResolveDisputeDto } from './dto';
+import { CreateListingDto, UpdateListingDto } from './dto';
+import { CreateOfferDto, UpdateOfferDto } from './dto';
+import { SetOnlineDto, UnfreezeDto } from './dto';
+
 // User Service Client
 export interface IUserClient {
   createUser(request: CreateUserRequest): Promise<User>;
@@ -179,35 +186,35 @@ export interface IP2PExchangeClient {
 
 // Controller Interfaces
 export interface IUsersController {
-  getProfile(): Promise<any>;
-  setOnline(dto: any): Promise<any>;
-  unfreeze(dto: any): Promise<any>;
+  getProfile(): Promise<User>;
+  setOnline(dto: SetOnlineDto): Promise<User>;
+  unfreeze(dto: UnfreezeDto): Promise<User>;
 }
 
 export interface IReviewsController {
-  create(dto: any): Promise<any>;
-  findOne(id: string): Promise<any>;
+  create(dto: CreateReviewDto): Promise<Review>;
+  findOne(id: string): Promise<Review>;
 }
 
 export interface IDisputesController {
-  getAll(): Promise<any>;
-  comment(id: string, dto: any): Promise<any>;
+  getAll(): Promise<Dispute[]>;
+  comment(id: string, dto: CreateDisputeDto): Promise<Dispute>;
 }
 
 export interface IExchangesController {
-  getActive(query: any): Promise<any>;
-  confirm(id: string, dto: any): Promise<any>;
-  dispute(id: string, dto: any): Promise<any>;
+  getActive(query: GetActiveExchangesRequest): Promise<GetActiveExchangesResponse>;
+  confirm(id: string, dto: ConfirmPaymentRequest): Promise<ConfirmPaymentResponse>;
+  dispute(id: string, dto: OpenDisputeRequest): Promise<OpenDisputeResponse>;
 }
 
 export interface IListingsController {
-  create(dto: any): Promise<any>;
-  findAll(query: any): Promise<any>;
-  findOne(id: string): Promise<any>;
+  create(dto: CreateListingDto): Promise<ExchangeListing>;
+  findAll(query: GetListingsRequest): Promise<GetListingsResponse>;
+  findOne(id: string): Promise<ExchangeListing>;
 }
 
 export interface IOffersController {
-  create(dto: any): Promise<any>;
-  updateStatus(id: string, dto: any): Promise<any>;
-  findOne(id: string): Promise<any>;
+  create(dto: CreateOfferDto): Promise<ExchangeOffer>;
+  updateStatus(id: string, dto: UpdateOfferDto): Promise<ExchangeOffer>;
+  findOne(id: string): Promise<ExchangeOffer>;
 }

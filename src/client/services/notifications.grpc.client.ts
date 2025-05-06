@@ -2,6 +2,32 @@ import { Injectable, Inject } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { NOTIFICATIONS_SERVICE } from '../constants';
+import { Observable } from 'rxjs';
+
+export interface NotificationData {
+  title?: string;
+  message: string;
+  priority?: 'low' | 'medium' | 'high';
+  metadata?: Record<string, unknown>;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  data: NotificationData;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationsService {
+  sendNotification(request: { userId: string; type: string; data: NotificationData }): Observable<void>;
+  getUserNotifications(request: { userId: string }): Observable<Notification[]>;
+  markAsRead(request: { notificationId: string; userId: string }): Observable<void>;
+  markAllAsRead(request: { userId: string }): Observable<void>;
+  deleteNotification(request: { notificationId: string; userId: string }): Observable<void>;
+}
 
 @Injectable()
 export class NotificationsGrpcClient extends BaseGrpcClient {
@@ -18,8 +44,8 @@ export class NotificationsGrpcClient extends BaseGrpcClient {
    * @param data - Данные уведомления
    * @returns {Promise<void>}
    */
-  async sendNotification(userId: string, type: string, data: any) {
-    const service = this.getService<any>('NotificationsService');
+  async sendNotification(userId: string, type: string, data: NotificationData): Promise<void> {
+    const service = this.getService<NotificationsService>('NotificationsService');
     return this.callGrpcMethod(service.sendNotification, {
       userId,
       type,
@@ -32,8 +58,8 @@ export class NotificationsGrpcClient extends BaseGrpcClient {
    * @param userId - ID пользователя
    * @returns {Promise<Notification[]>} Список уведомлений
    */
-  async getUserNotifications(userId: string) {
-    const service = this.getService<any>('NotificationsService');
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    const service = this.getService<NotificationsService>('NotificationsService');
     return this.callGrpcMethod(service.getUserNotifications, { userId });
   }
 
@@ -43,8 +69,8 @@ export class NotificationsGrpcClient extends BaseGrpcClient {
    * @param userId - ID пользователя
    * @returns {Promise<void>}
    */
-  async markAsRead(notificationId: string, userId: string) {
-    const service = this.getService<any>('NotificationsService');
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
+    const service = this.getService<NotificationsService>('NotificationsService');
     return this.callGrpcMethod(service.markAsRead, { notificationId, userId });
   }
 
@@ -53,8 +79,8 @@ export class NotificationsGrpcClient extends BaseGrpcClient {
    * @param userId - ID пользователя
    * @returns {Promise<void>}
    */
-  async markAllAsRead(userId: string) {
-    const service = this.getService<any>('NotificationsService');
+  async markAllAsRead(userId: string): Promise<void> {
+    const service = this.getService<NotificationsService>('NotificationsService');
     return this.callGrpcMethod(service.markAllAsRead, { userId });
   }
 
@@ -64,8 +90,8 @@ export class NotificationsGrpcClient extends BaseGrpcClient {
    * @param userId - ID пользователя
    * @returns {Promise<void>}
    */
-  async deleteNotification(notificationId: string, userId: string) {
-    const service = this.getService<any>('NotificationsService');
+  async deleteNotification(notificationId: string, userId: string): Promise<void> {
+    const service = this.getService<NotificationsService>('NotificationsService');
     return this.callGrpcMethod(service.deleteNotification, { notificationId, userId });
   }
 } 

@@ -25,20 +25,20 @@ service ExchangeService {
 
 // Enums
 enum ExchangeType {
-  CRYPTO_TO_FIAT = 0;
-  FIAT_TO_CRYPTO = 1;
+  CRYPTO_TO_FIAT = 0;  // Customer передаёт крипту и получает фиат вне платформы
+  FIAT_TO_CRYPTO = 1;  // Customer передаёт фиат вне платформы и получает крипту
 }
 
 enum TransactionStatus {
-  PENDING = 0;
-  APPROVED = 1;
-  DECLINED = 2;
-  PAYMENT_CONFIRMED = 3;
-  RECEIPT_CONFIRMED = 4;
-  FINISHED = 5;
-  CANCELLED = 6;
-  DISPUTE_OPEN = 7;
-  DISPUTE_RESOLVED = 8;
+  PENDING = 0;           // Оффер создан, ожидает ответа Exchanger'а
+  ACTIVE = 1;            // Оффер принят, сделка активна
+  DECLINED = 2;          // Оффер отклонён
+  PAYMENT_CONFIRMED = 3; // Платеж подтверждён
+  RECEIPT_CONFIRMED = 4; // Получение подтверждено
+  FINISHED = 5;          // Сделка завершена успешно
+  CANCELLED = 6;         // Сделка отменена
+  DISPUTE_OPEN = 7;      // Открыт спор
+  DISPUTE_RESOLVED = 8;  // Спор разрешён
 }
 
 enum RespondAction {
@@ -142,9 +142,9 @@ message ExchangeTransaction {
   double fiatAmount = 7;
   optional string paymentProof = 8;
   optional string disputeId = 9;
-  string confirmationDeadline = 10;
-  bool canCustomerDispute = 11;
-  bool canExchangerDispute = 12;
+  string confirmationDeadline = 10;  // TTL для завершённых сделок
+  bool canCustomerDispute = 11;     // Может ли Customer открыть спор
+  bool canExchangerDispute = 12;    // Может ли Exchanger открыть спор
   bool isActive = 13;
   string customerId = 14;
   string exchangerId = 15;

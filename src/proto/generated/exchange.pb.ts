@@ -11,9 +11,54 @@ import { Observable } from "rxjs";
 
 export const protobufPackage = "exchange";
 
+/** Enums */
+export enum ExchangeType {
+  /** CRYPTO_TO_FIAT - Customer передаёт крипту и получает фиат вне платформы */
+  CRYPTO_TO_FIAT = 0,
+  /** FIAT_TO_CRYPTO - Customer передаёт фиат вне платформы и получает крипту */
+  FIAT_TO_CRYPTO = 1,
+  UNRECOGNIZED = -1,
+}
+
+export enum TransactionStatus {
+  /** PENDING - Оффер создан, ожидает ответа Exchanger'а */
+  PENDING = 0,
+  /** ACTIVE - Оффер принят, сделка активна */
+  ACTIVE = 1,
+  /** DECLINED - Оффер отклонён */
+  DECLINED = 2,
+  /** PAYMENT_CONFIRMED - Платеж подтверждён */
+  PAYMENT_CONFIRMED = 3,
+  /** RECEIPT_CONFIRMED - Получение подтверждено */
+  RECEIPT_CONFIRMED = 4,
+  /** FINISHED - Сделка завершена успешно */
+  FINISHED = 5,
+  /** CANCELLED - Сделка отменена */
+  CANCELLED = 6,
+  /** DISPUTE_OPEN - Открыт спор */
+  DISPUTE_OPEN = 7,
+  /** DISPUTE_RESOLVED - Спор разрешён */
+  DISPUTE_RESOLVED = 8,
+  UNRECOGNIZED = -1,
+}
+
+export enum RespondAction {
+  ACCEPT = 0,
+  DECLINE = 1,
+  UNRECOGNIZED = -1,
+}
+
+export enum Role {
+  CUSTOMER = 0,
+  EXCHANGER = 1,
+  MODERATOR = 2,
+  UNRECOGNIZED = -1,
+}
+
+/** Messages */
 export interface CreateListingRequest {
   userId: string;
-  type: string;
+  type: ExchangeType;
   cryptocurrency: string;
   fiatCurrency: string;
   rate: number;
@@ -26,7 +71,7 @@ export interface CreateListingRequest {
 
 export interface ExchangeListing {
   id: string;
-  type: string;
+  type: ExchangeType;
   cryptocurrency: string;
   fiatCurrency: string;
   rate: number;
@@ -42,7 +87,7 @@ export interface ExchangeListing {
 }
 
 export interface GetListingsRequest {
-  type?: string | undefined;
+  type?: ExchangeType | undefined;
   cryptocurrency?: string | undefined;
   fiatCurrency?: string | undefined;
   minRate?: number | undefined;
@@ -64,32 +109,49 @@ export interface CreateOfferRequest {
 export interface ExchangeOffer {
   id: string;
   amount: number;
-  status: string;
+  status: TransactionStatus;
   userId: string;
   listingId: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface RespondOfferRequest {
+  offerId: string;
+  exchangerId: string;
+  action: RespondAction;
+}
+
+export interface RespondOfferResponse {
+  offerId: string;
+  status: TransactionStatus;
+  message: string;
+}
+
 export interface UpdateTransactionStatusRequest {
   transactionId: string;
   userId: string;
-  status: string;
+  status: TransactionStatus;
   paymentProof?: string | undefined;
 }
 
 export interface ExchangeTransaction {
   id: string;
-  type: string;
-  status: string;
+  type: ExchangeType;
+  status: TransactionStatus;
   cryptocurrency: string;
   fiatCurrency: string;
   cryptoAmount: number;
   fiatAmount: number;
   paymentProof?: string | undefined;
-  disputeId?: string | undefined;
+  disputeId?:
+    | string
+    | undefined;
+  /** TTL для завершённых сделок */
   confirmationDeadline: string;
+  /** Может ли Customer открыть спор */
   canCustomerDispute: boolean;
+  /** Может ли Exchanger открыть спор */
   canExchangerDispute: boolean;
   isActive: boolean;
   customerId: string;
@@ -109,14 +171,79 @@ export interface GetActiveExchangesResponse {
   transactions: ExchangeTransaction[];
 }
 
+export interface ConfirmPaymentRequest {
+  transactionId: string;
+  exchangerId: string;
+  paymentReference: string;
+}
+
+export interface ConfirmPaymentResponse {
+  transactionId: string;
+  status: TransactionStatus;
+  message: string;
+}
+
+export interface ConfirmReceiptRequest {
+  transactionId: string;
+  customerId: string;
+}
+
+export interface ConfirmReceiptResponse {
+  transactionId: string;
+  status: TransactionStatus;
+  message: string;
+}
+
+export interface CancelTransactionRequest {
+  transactionId: string;
+  cancelledBy: Role;
+  reason: string;
+}
+
+export interface CancelTransactionResponse {
+  transactionId: string;
+  status: TransactionStatus;
+  message: string;
+}
+
+export interface SetExchangerStatusRequest {
+  exchangerId: string;
+  online: boolean;
+}
+
+export interface SetExchangerStatusResponse {
+  exchangerId: string;
+  online: boolean;
+  message: string;
+}
+
+export interface FreezeExchangerRequest {
+  exchangerId: string;
+  reason: string;
+}
+
+export interface FreezeExchangerResponse {
+  exchangerId: string;
+  isFrozen: boolean;
+  message: string;
+}
+
 export const EXCHANGE_PACKAGE_NAME = "exchange";
 
 export interface ExchangeServiceClient {
+  /** Listing Operations */
+
   createListing(request: CreateListingRequest, metadata?: Metadata): Observable<ExchangeListing>;
 
   getListings(request: GetListingsRequest, metadata?: Metadata): Observable<GetListingsResponse>;
 
+  /** Offer Operations */
+
   createOffer(request: CreateOfferRequest, metadata?: Metadata): Observable<ExchangeOffer>;
+
+  respondOffer(request: RespondOfferRequest, metadata?: Metadata): Observable<RespondOfferResponse>;
+
+  /** Transaction Operations */
 
   updateTransactionStatus(
     request: UpdateTransactionStatusRequest,
@@ -124,9 +251,23 @@ export interface ExchangeServiceClient {
   ): Observable<ExchangeTransaction>;
 
   getActiveExchanges(request: GetActiveExchangesRequest, metadata?: Metadata): Observable<GetActiveExchangesResponse>;
+
+  confirmPayment(request: ConfirmPaymentRequest, metadata?: Metadata): Observable<ConfirmPaymentResponse>;
+
+  confirmReceipt(request: ConfirmReceiptRequest, metadata?: Metadata): Observable<ConfirmReceiptResponse>;
+
+  cancelTransaction(request: CancelTransactionRequest, metadata?: Metadata): Observable<CancelTransactionResponse>;
+
+  /** Exchanger Management */
+
+  setExchangerStatus(request: SetExchangerStatusRequest, metadata?: Metadata): Observable<SetExchangerStatusResponse>;
+
+  freezeExchanger(request: FreezeExchangerRequest, metadata?: Metadata): Observable<FreezeExchangerResponse>;
 }
 
 export interface ExchangeServiceController {
+  /** Listing Operations */
+
   createListing(
     request: CreateListingRequest,
     metadata?: Metadata,
@@ -137,10 +278,19 @@ export interface ExchangeServiceController {
     metadata?: Metadata,
   ): Promise<GetListingsResponse> | Observable<GetListingsResponse> | GetListingsResponse;
 
+  /** Offer Operations */
+
   createOffer(
     request: CreateOfferRequest,
     metadata?: Metadata,
   ): Promise<ExchangeOffer> | Observable<ExchangeOffer> | ExchangeOffer;
+
+  respondOffer(
+    request: RespondOfferRequest,
+    metadata?: Metadata,
+  ): Promise<RespondOfferResponse> | Observable<RespondOfferResponse> | RespondOfferResponse;
+
+  /** Transaction Operations */
 
   updateTransactionStatus(
     request: UpdateTransactionStatusRequest,
@@ -151,6 +301,33 @@ export interface ExchangeServiceController {
     request: GetActiveExchangesRequest,
     metadata?: Metadata,
   ): Promise<GetActiveExchangesResponse> | Observable<GetActiveExchangesResponse> | GetActiveExchangesResponse;
+
+  confirmPayment(
+    request: ConfirmPaymentRequest,
+    metadata?: Metadata,
+  ): Promise<ConfirmPaymentResponse> | Observable<ConfirmPaymentResponse> | ConfirmPaymentResponse;
+
+  confirmReceipt(
+    request: ConfirmReceiptRequest,
+    metadata?: Metadata,
+  ): Promise<ConfirmReceiptResponse> | Observable<ConfirmReceiptResponse> | ConfirmReceiptResponse;
+
+  cancelTransaction(
+    request: CancelTransactionRequest,
+    metadata?: Metadata,
+  ): Promise<CancelTransactionResponse> | Observable<CancelTransactionResponse> | CancelTransactionResponse;
+
+  /** Exchanger Management */
+
+  setExchangerStatus(
+    request: SetExchangerStatusRequest,
+    metadata?: Metadata,
+  ): Promise<SetExchangerStatusResponse> | Observable<SetExchangerStatusResponse> | SetExchangerStatusResponse;
+
+  freezeExchanger(
+    request: FreezeExchangerRequest,
+    metadata?: Metadata,
+  ): Promise<FreezeExchangerResponse> | Observable<FreezeExchangerResponse> | FreezeExchangerResponse;
 }
 
 export function ExchangeServiceControllerMethods() {
@@ -159,8 +336,14 @@ export function ExchangeServiceControllerMethods() {
       "createListing",
       "getListings",
       "createOffer",
+      "respondOffer",
       "updateTransactionStatus",
       "getActiveExchanges",
+      "confirmPayment",
+      "confirmReceipt",
+      "cancelTransaction",
+      "setExchangerStatus",
+      "freezeExchanger",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

@@ -1,4 +1,5 @@
-import { ExchangeType, PaymentMethod, TransactionStatus, OfferStatus } from '@prisma/client';
+import { ExchangeType, PaymentMethod, TransactionStatus } from '@prisma/client';
+import { OfferStatus } from 'src/client/interfaces/enums';
 
 export interface Listing {
   id: string;
