@@ -92,7 +92,6 @@ import {
   ExchangeType,
   TransactionStatus,
   RespondAction,
-  ResolutionOutcome,
   Role
 } from '../../proto/generated/p2p.pb';
 

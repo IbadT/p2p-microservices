@@ -37,8 +37,6 @@ export interface GetChatMessagesRequest {
 export interface GetChatMessagesResponse {
   messages: Message[];
   total: number;
-  page: number;
-  limit: number;
 }
 
 export interface GetDisputeChatRequest {
@@ -46,9 +44,36 @@ export interface GetDisputeChatRequest {
   userId: string;
 }
 
+export interface GetChatHistoryRequest {
+  chatId: string;
+  userId: string;
+  page: number;
+  limit: number;
+}
+
+export interface GetChatHistoryResponse {
+  chat: Chat | undefined;
+  messages: Message[];
+  total: number;
+}
+
+export interface AddModeratorCommentRequest {
+  disputeId: string;
+  moderatorId: string;
+  text: string;
+}
+
+export interface GetDisputeCommentsRequest {
+  disputeId: string;
+  userId: string;
+}
+
+export interface GetDisputeCommentsResponse {
+  comments: Comment[];
+}
+
 export interface Chat {
   id: string;
-  type: string;
   disputeId: string;
   participants: ChatParticipant[];
   createdAt: string;
@@ -57,26 +82,38 @@ export interface Chat {
 
 export interface ChatParticipant {
   id: string;
+  chatId: string;
   userId: string;
   role: string;
-  user: User | undefined;
-  joinedAt: string;
-}
-
-export interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  sender: User | undefined;
-  chatId: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface Message {
+  id: string;
+  chatId: string;
+  userId: string;
+  content: string;
+  isModeratorMessage: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: User | undefined;
+}
+
 export interface User {
   id: string;
-  name: string;
-  role: string;
+  email: string;
+}
+
+export interface Comment {
+  id: string;
+  disputeId: string;
+  userId: string;
+  text: string;
+  isModeratorComment: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: User | undefined;
 }
 
 export const CHAT_PACKAGE_NAME = "chat";
@@ -91,6 +128,12 @@ export interface ChatServiceClient {
   getChatMessages(request: GetChatMessagesRequest, metadata?: Metadata): Observable<GetChatMessagesResponse>;
 
   getDisputeChat(request: GetDisputeChatRequest, metadata?: Metadata): Observable<Chat>;
+
+  getChatHistory(request: GetChatHistoryRequest, metadata?: Metadata): Observable<GetChatHistoryResponse>;
+
+  addModeratorComment(request: AddModeratorCommentRequest, metadata?: Metadata): Observable<Comment>;
+
+  getDisputeComments(request: GetDisputeCommentsRequest, metadata?: Metadata): Observable<GetDisputeCommentsResponse>;
 }
 
 export interface ChatServiceController {
@@ -106,6 +149,21 @@ export interface ChatServiceController {
   ): Promise<GetChatMessagesResponse> | Observable<GetChatMessagesResponse> | GetChatMessagesResponse;
 
   getDisputeChat(request: GetDisputeChatRequest, metadata?: Metadata): Promise<Chat> | Observable<Chat> | Chat;
+
+  getChatHistory(
+    request: GetChatHistoryRequest,
+    metadata?: Metadata,
+  ): Promise<GetChatHistoryResponse> | Observable<GetChatHistoryResponse> | GetChatHistoryResponse;
+
+  addModeratorComment(
+    request: AddModeratorCommentRequest,
+    metadata?: Metadata,
+  ): Promise<Comment> | Observable<Comment> | Comment;
+
+  getDisputeComments(
+    request: GetDisputeCommentsRequest,
+    metadata?: Metadata,
+  ): Promise<GetDisputeCommentsResponse> | Observable<GetDisputeCommentsResponse> | GetDisputeCommentsResponse;
 }
 
 export function ChatServiceControllerMethods() {
@@ -116,6 +174,9 @@ export function ChatServiceControllerMethods() {
       "sendMessage",
       "getChatMessages",
       "getDisputeChat",
+      "getChatHistory",
+      "addModeratorComment",
+      "getDisputeComments",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

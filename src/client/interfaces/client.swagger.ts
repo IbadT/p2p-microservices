@@ -85,17 +85,24 @@ export class CreateDisputeDto {
 }
 
 export class ResolveDisputeDto {
-  @ApiProperty({ description: 'ID спора', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiProperty({ description: 'ID of the dispute to resolve' })
   disputeId: string;
 
-  @ApiProperty({ description: 'ID модератора', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiProperty({ description: 'ID of the moderator resolving the dispute' })
   moderatorId: string;
 
-  @ApiProperty({ description: 'Решение по спору', example: 'Возврат средств покупателю' })
+  @ApiProperty({ description: 'Resolution explanation' })
   resolution: string;
 
-  @ApiProperty({ description: 'ID победителя спора', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiProperty({ description: 'ID of the user who won the dispute' })
   winnerUserId: string;
+
+  @ApiProperty({ 
+    description: 'Final status of the transaction after dispute resolution',
+    enum: ['FINISHED', 'CANCELLED'],
+    required: false
+  })
+  finalStatus?: 'FINISHED' | 'CANCELLED';
 }
 
 export class AddCommentDto {
@@ -525,4 +532,58 @@ export class RegisterDto {
 export class RefreshTokenDto {
   @ApiProperty({ description: 'Токен обновления' })
   refreshToken: string;
+}
+
+export class ChatHistory {
+  @ApiProperty({ description: 'ID of the chat' })
+  id: string;
+
+  @ApiProperty({ description: 'ID of the dispute' })
+  disputeId: string;
+
+  @ApiProperty({ description: 'List of messages in the chat' })
+  messages: ChatMessage[];
+
+  @ApiProperty({ description: 'Creation date of the chat' })
+  createdAt: string;
+
+  @ApiProperty({ description: 'Last update date of the chat' })
+  updatedAt: string;
+}
+
+export class ChatMessage {
+  @ApiProperty({ description: 'ID of the message' })
+  id: string;
+
+  @ApiProperty({ description: 'ID of the user who sent the message' })
+  userId: string;
+
+  @ApiProperty({ description: 'Text content of the message' })
+  text: string;
+
+  @ApiProperty({ description: 'Whether the message is from a moderator' })
+  isModerator: boolean;
+
+  @ApiProperty({ description: 'Creation date of the message' })
+  createdAt: string;
+}
+
+export class Comment {
+  @ApiProperty({ description: 'ID of the comment' })
+  id: string;
+
+  @ApiProperty({ description: 'ID of the dispute' })
+  disputeId: string;
+
+  @ApiProperty({ description: 'ID of the user who wrote the comment' })
+  userId: string;
+
+  @ApiProperty({ description: 'Text content of the comment' })
+  text: string;
+
+  @ApiProperty({ description: 'Whether the comment is from a moderator' })
+  isModerator: boolean;
+
+  @ApiProperty({ description: 'Creation date of the comment' })
+  createdAt: string;
 } 

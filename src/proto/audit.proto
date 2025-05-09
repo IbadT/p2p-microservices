@@ -2,10 +2,18 @@ syntax = "proto3";
 
 package audit;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service AuditService {
   rpc CreateAuditLog (CreateAuditLogRequest) returns (AuditLog) {}
   rpc GetAuditLogs (GetAuditLogsRequest) returns (AuditLogsResponse) {}
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateAuditLogRequest {
   string userId = 1;

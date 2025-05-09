@@ -50,6 +50,7 @@ model User {
   exchangerStatus   ExchangerStatus?
   messages          Message[]
   chatParticipants  ChatParticipant[]
+  comments          Comment[]
 
   @@index([isExchangerActive])
   @@index([isFrozen])
@@ -192,6 +193,7 @@ model Dispute {
   moderatorId     String?
   moderator       User?            @relation("DisputeModerator", fields: [moderatorId], references: [id])
   chat            Chat?
+  comments        Comment[]
 
   @@index([status])
   @@index([initiatorId])
@@ -379,4 +381,22 @@ enum ChatParticipantRole {
   EXCHANGER
   MODERATOR
   ADMIN
+}
+
+model Comment {
+  id          String    @id @default(uuid())
+  disputeId   String
+  userId      String
+  text        String
+  isModerator Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relationships
+  dispute     Dispute   @relation(fields: [disputeId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([disputeId])
+  @@index([userId])
+  @@map("comments")
 }

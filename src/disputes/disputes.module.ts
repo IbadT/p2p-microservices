@@ -3,7 +3,6 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DisputesController } from './disputes.controller';
 import { DisputesService } from './disputes.service';
 import { PrismaService } from '../prisma.service';
-// import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';

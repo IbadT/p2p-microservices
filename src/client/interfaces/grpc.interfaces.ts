@@ -41,6 +41,9 @@ export interface Dispute {
   reason: string;
   evidence?: string[];
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  resolution?: string;
+  moderatorId?: string;
+  resolvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -188,7 +191,7 @@ export interface CancelTransactionResponse {
 
 export interface ResolveDisputeRequest {
   disputeId: string;
-  adminId: string;
+  moderatorId: string;
   resolution: string;
   winnerUserId: string;
 }

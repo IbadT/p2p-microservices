@@ -2,12 +2,20 @@ syntax = "proto3";
 
 package transactions;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service TransactionsService {
   rpc CreateTransaction (CreateTransactionRequest) returns (CreateTransactionResponse);
   rpc GetTransaction (GetTransactionRequest) returns (GetTransactionResponse);
   rpc ListTransactions (ListTransactionsRequest) returns (ListTransactionsResponse);
   rpc UpdateTransactionStatus (UpdateTransactionStatusRequest) returns (UpdateTransactionStatusResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateTransactionRequest {
   string userId = 1;

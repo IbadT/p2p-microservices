@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package offers;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service OffersService {
   rpc CreateOffer (CreateOfferRequest) returns (CreateOfferResponse);
   rpc GetOffer (GetOfferRequest) returns (GetOfferResponse);
@@ -9,6 +13,10 @@ service OffersService {
   rpc UpdateOffer (UpdateOfferRequest) returns (UpdateOfferResponse);
   rpc DeleteOffer (DeleteOfferRequest) returns (DeleteOfferResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateOfferRequest {
   string userId = 1;

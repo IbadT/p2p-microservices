@@ -11,6 +11,20 @@ import { Observable } from "rxjs";
 
 export const protobufPackage = "disputes";
 
+export interface User {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface Chat {
+  id: string;
+  type: string;
+  disputeId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateDisputeRequest {
   transactionId: string;
   initiatorId: string;
@@ -52,6 +66,36 @@ export interface Dispute {
   updatedAt: string;
 }
 
+export interface GetDisputeChatRequest {
+  disputeId: string;
+  userId: string;
+}
+
+export interface AddDisputeCommentRequest {
+  disputeId: string;
+  userId: string;
+  text: string;
+}
+
+export interface GetDisputeCommentsRequest {
+  disputeId: string;
+  userId: string;
+}
+
+export interface GetDisputeCommentsResponse {
+  comments: Comment[];
+}
+
+export interface Comment {
+  id: string;
+  disputeId: string;
+  userId: string;
+  text: string;
+  isModerator: boolean;
+  createdAt: string;
+  user: User | undefined;
+}
+
 export const DISPUTES_PACKAGE_NAME = "disputes";
 
 export interface DisputeServiceClient {
@@ -62,6 +106,12 @@ export interface DisputeServiceClient {
   getDisputesByUser(request: GetDisputesByUserRequest, metadata?: Metadata): Observable<GetDisputesByUserResponse>;
 
   getOpenDisputes(request: GetOpenDisputesRequest, metadata?: Metadata): Observable<GetOpenDisputesResponse>;
+
+  getDisputeChat(request: GetDisputeChatRequest, metadata?: Metadata): Observable<Chat>;
+
+  addDisputeComment(request: AddDisputeCommentRequest, metadata?: Metadata): Observable<Comment>;
+
+  getDisputeComments(request: GetDisputeCommentsRequest, metadata?: Metadata): Observable<GetDisputeCommentsResponse>;
 }
 
 export interface DisputeServiceController {
@@ -78,11 +128,31 @@ export interface DisputeServiceController {
     request: GetOpenDisputesRequest,
     metadata?: Metadata,
   ): Promise<GetOpenDisputesResponse> | Observable<GetOpenDisputesResponse> | GetOpenDisputesResponse;
+
+  getDisputeChat(request: GetDisputeChatRequest, metadata?: Metadata): Promise<Chat> | Observable<Chat> | Chat;
+
+  addDisputeComment(
+    request: AddDisputeCommentRequest,
+    metadata?: Metadata,
+  ): Promise<Comment> | Observable<Comment> | Comment;
+
+  getDisputeComments(
+    request: GetDisputeCommentsRequest,
+    metadata?: Metadata,
+  ): Promise<GetDisputeCommentsResponse> | Observable<GetDisputeCommentsResponse> | GetDisputeCommentsResponse;
 }
 
 export function DisputeServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["createDispute", "resolveDispute", "getDisputesByUser", "getOpenDisputes"];
+    const grpcMethods: string[] = [
+      "createDispute",
+      "resolveDispute",
+      "getDisputesByUser",
+      "getOpenDisputes",
+      "getDisputeChat",
+      "addDisputeComment",
+      "getDisputeComments",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DisputeService", method)(constructor.prototype[method], method, descriptor);

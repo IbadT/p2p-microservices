@@ -2,183 +2,8 @@ syntax = "proto3";
 
 package p2p;
 
-
 // ------------------------------
-// Сервис
-// ------------------------------
-
-service P2PExchangeService {
-  
-  // 1. Создание Exchange Offer (инициируется Customer'ом)
-  rpc CreateExchangeOffer (CreateExchangeOfferRequest) returns (CreateExchangeOfferResponse);
-
-  // 2. Exchanger отвечает на предложение (принять или отклонить)
-  rpc RespondExchangeOffer (RespondExchangeOfferRequest) returns (RespondExchangeOfferResponse);
-
-  // 3. Exchanger подтверждает, что перевод фиата выполнен
-  rpc ConfirmPayment (ConfirmPaymentRequest) returns (ConfirmPaymentResponse);
-
-  // 4. Customer подтверждает получение фиата, завершая сделку
-  rpc ConfirmReceipt (ConfirmReceiptRequest) returns (ConfirmReceiptResponse);
-
-  // 5. Открытие спора любой стороной
-  rpc OpenDispute (OpenDisputeRequest) returns (OpenDisputeResponse);
-
-  // 6. Получение текущего статуса сделки
-  rpc GetTransactionStatus (TransactionStatusRequest) returns (TransactionStatusResponse);
-
-  // 7. Установка статуса онлайн для Exchanger'а
-  rpc SetExchangerStatus (SetExchangerStatusRequest) returns (SetExchangerStatusResponse);
-
-  // 8. Отмена сделки
-  rpc CancelTransaction (CancelTransactionRequest) returns (CancelTransactionResponse);
-
-  // 9. Разрешение спора (административная функция)
-  rpc ResolveDispute (ResolveDisputeRequest) returns (ResolveDisputeResponse);
-
-  /** 10. Заморозка Exchanger'а (административная операция) */
-  rpc FreezeExchanger (FreezeExchangerRequest) returns (FreezeExchangerResponse);
-}
-
-
-
-// ------------------------------
-// Сообщения (Messages)
-// ------------------------------
-
-// 1. Создание Exchange Offer (инициируется Customer'ом)
-message CreateExchangeOfferRequest {
-  string customer_id = 1;          // Идентификатор Customer'а
-  string listing_id = 2;           // Идентификатор Exchange Listing (объявления, созданного Exchanger'ом)
-  double amount = 3;               // Сумма сделки
-  ExchangeType exchange_type = 4;  // Тип сделки: CRYPTO2FIAT или FIAT2CRYPTO
-  string conditions = 5;           // Дополнительные условия (курс, лимиты, время и т.д.)
-}
-
-message CreateExchangeOfferResponse {
-  string offer_id = 1;             // Уникальный идентификатор созданного предложения
-  TransactionStatus status = 2;    // Начальный статус сделки (например, PENDING)
-  string message = 3;              // Сообщение (например, "Оффер создан")
-}
-
-// 2. Ответ Exchanger'а на предложение (принять/отклонить)
-message RespondExchangeOfferRequest {
-  string offer_id = 1;             // Идентификатор предложения, на которое отвечает Exchanger
-  string exchanger_id = 2;         // Идентификатор Exchanger'а, владеющего объявлением
-  RespondAction action = 3;        // Действие Exchanger'а: ACCEPT или DECLINE
-}
-
-message RespondExchangeOfferResponse {
-  string offer_id = 1;
-  TransactionStatus status = 2;    // Новый статус: APPROVED при принятии или DECLINED при отклонении
-  string message = 3;
-}
-
-// 3. Подтверждение перевода фиата Exchanger'ом
-message ConfirmPaymentRequest {
-  string offer_id = 1;             // Идентификатор сделки
-  string exchanger_id = 2;         // Идентификатор Exchanger'а
-  string payment_reference = 3;    // Референс внешней транзакции (например, номер платежа)
-}
-
-message ConfirmPaymentResponse {
-  string offer_id = 1;
-  TransactionStatus status = 2;    // Ожидается PAYMENT_CONFIRMED
-  string message = 3;
-}
-
-// 4. Подтверждение получения фиата Customer'ом
-message ConfirmReceiptRequest {
-  string offer_id = 1;             // Идентификатор сделки
-  string customer_id = 2;
-}
-
-message ConfirmReceiptResponse {
-  string offer_id = 1;
-  TransactionStatus status = 2;    // Ожидается RECEIPT_CONFIRMED или FINISHED
-  string message = 3;
-}
-
-// 5. Открытие спора (может быть инициировано как Customer, так и Exchanger)
-message OpenDisputeRequest {
-  string offer_id = 1;             // Идентификатор сделки
-  Role opened_by = 2;              // Кто инициирует спор: CUSTOMER или EXCHANGER
-  string reason = 3;               // Обоснование открытия спора
-}
-
-message OpenDisputeResponse {
-  string dispute_id = 1;           // Идентификатор спора
-  TransactionStatus status = 2;    // Новый статус, например, DISPUTE_OPEN
-  string message = 3;
-}
-
-// 6. Запрос статуса сделки
-message TransactionStatusRequest {
-  string offer_id = 1;
-}
-
-message TransactionStatusResponse {
-  string offer_id = 1;
-  TransactionStatus status = 2;
-  string details = 3;              // Дополнительные сведения о сделке
-}
-
-// 7. Установка статуса онлайн для Exchanger'а
-message SetExchangerStatusRequest {
-  string exchanger_id = 1;
-  bool online = 2;                 // true - онлайн, false - офлайн
-}
-
-message SetExchangerStatusResponse {
-  string exchanger_id = 1;
-  bool online = 2;
-  string message = 3;
-}
-
-// 8. Отмена сделки (м.б. инициировано любой стороной)
-message CancelTransactionRequest {
-  string offer_id = 1;
-  Role cancelled_by = 2;           // Кто отменяет сделку: CUSTOMER или EXCHANGER
-  string reason = 3;               // Причина отмены
-}
-
-message CancelTransactionResponse {
-  string offer_id = 1;
-  TransactionStatus status = 2;    // Ожидается статус CANCELLED
-  string message = 3;
-}
-
-// 9. Разрешение спора (административная операция)
-message ResolveDisputeRequest {
-  string dispute_id = 1;
-  string admin_id = 2;             // Идентификатор администратора/модератора
-  ResolutionOutcome resolution = 3;// Результат разрешения спора
-  string comment = 4;              // Комментарий, поясняющий решение
-}
-
-message ResolveDisputeResponse {
-  string dispute_id = 1;
-  TransactionStatus status = 2;    // Ожидается DISPUTE_RESOLVED
-  string message = 3;
-}
-
-/** 10. Заморозка Exchanger'а */
-message FreezeExchangerRequest {
-  string exchanger_id = 1;  // Идентификатор Exchanger'а
-  string reason = 2;        // Причина заморозки
-}
-
-message FreezeExchangerResponse {
-  string exchanger_id = 1;  // Идентификатор Exchanger'а
-  bool is_frozen = 2;       // Статус заморозки
-  string message = 3;       // Сообщение
-}
-
-
-
-
-// ------------------------------
-// Перечисления
+// Enums
 // ------------------------------
 
 enum ExchangeType {
@@ -203,13 +28,149 @@ enum RespondAction {
   DECLINE = 1;  // Exchanger отклоняет сделку.
 }
 
-enum ResolutionOutcome {
-  RESOLVED_FINISHED = 0;   // Сделка завершается успешно после спора.
-  RESOLVED_CANCELLED = 1;  // Сделка отменяется.
-  RESOLVED_PARTIAL = 2;    // Частичное решение (например, частичный возврат).
-}
-
 enum Role {
   CUSTOMER = 0;
   EXCHANGER = 1;
+}
+
+// ------------------------------
+// Messages
+// ------------------------------
+
+message CreateExchangeOfferRequest {
+  string customer_id = 1;          // Идентификатор Customer'а
+  string listing_id = 2;           // Идентификатор Exchange Listing
+  double amount = 3;               // Сумма сделки
+  ExchangeType exchange_type = 4;  // Тип сделки
+  string conditions = 5;           // Дополнительные условия
+}
+
+message CreateExchangeOfferResponse {
+  string offer_id = 1;             // ID предложения
+  TransactionStatus status = 2;    // Статус
+  string message = 3;              // Сообщение
+}
+
+message RespondExchangeOfferRequest {
+  string offer_id = 1;
+  string exchanger_id = 2;
+  RespondAction action = 3;
+}
+
+message RespondExchangeOfferResponse {
+  string offer_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message ConfirmPaymentRequest {
+  string offer_id = 1;
+  string exchanger_id = 2;
+  string payment_reference = 3;
+}
+
+message ConfirmPaymentResponse {
+  string offer_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message ConfirmReceiptRequest {
+  string offer_id = 1;
+  string customer_id = 2;
+}
+
+message ConfirmReceiptResponse {
+  string offer_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message OpenDisputeRequest {
+  string offer_id = 1;
+  Role opened_by = 2;
+  string reason = 3;
+}
+
+message OpenDisputeResponse {
+  string dispute_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message TransactionStatusRequest {
+  string offer_id = 1;
+}
+
+message TransactionStatusResponse {
+  string offer_id = 1;
+  TransactionStatus status = 2;
+  string details = 3;
+}
+
+message SetExchangerStatusRequest {
+  string exchanger_id = 1;
+  bool online = 2;
+}
+
+message SetExchangerStatusResponse {
+  string exchanger_id = 1;
+  bool online = 2;
+  string message = 3;
+}
+
+message CancelTransactionRequest {
+  string offer_id = 1;
+  Role cancelled_by = 2;
+  string reason = 3;
+}
+
+message CancelTransactionResponse {
+  string offer_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+}
+
+message ResolveDisputeRequest {
+  string dispute_id = 1;
+  string admin_id = 2;
+  string resolution = 3;
+  string winner_user_id = 4;
+  TransactionStatus final_status = 5;
+}
+
+message ResolveDisputeResponse {
+  string dispute_id = 1;
+  TransactionStatus status = 2;
+  string message = 3;
+  string winner_user_id = 4;
+  TransactionStatus final_status = 5;
+}
+
+message FreezeExchangerRequest {
+  string exchanger_id = 1;
+  string reason = 2;
+}
+
+message FreezeExchangerResponse {
+  string exchanger_id = 1;
+  bool is_frozen = 2;
+  string message = 3;
+}
+
+// ------------------------------
+// Service
+// ------------------------------
+
+service P2PExchangeService {
+  rpc CreateExchangeOffer (CreateExchangeOfferRequest) returns (CreateExchangeOfferResponse);
+  rpc RespondExchangeOffer (RespondExchangeOfferRequest) returns (RespondExchangeOfferResponse);
+  rpc ConfirmPayment (ConfirmPaymentRequest) returns (ConfirmPaymentResponse);
+  rpc ConfirmReceipt (ConfirmReceiptRequest) returns (ConfirmReceiptResponse);
+  rpc OpenDispute (OpenDisputeRequest) returns (OpenDisputeResponse);
+  rpc GetTransactionStatus (TransactionStatusRequest) returns (TransactionStatusResponse);
+  rpc SetExchangerStatus (SetExchangerStatusRequest) returns (SetExchangerStatusResponse);
+  rpc CancelTransaction (CancelTransactionRequest) returns (CancelTransactionResponse);
+  rpc ResolveDispute (ResolveDisputeRequest) returns (ResolveDisputeResponse);
+  rpc FreezeExchanger (FreezeExchangerRequest) returns (FreezeExchangerResponse);
 }

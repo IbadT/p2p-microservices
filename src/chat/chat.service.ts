@@ -2,8 +2,24 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { PrismaService } from '../prisma.service';
 import { KafkaService } from '../kafka/kafka.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
-import { ChatType, ChatParticipantRole, UserRole } from '@prisma/client';
+import { ChatType, ChatParticipantRole, UserRole, Comment as PrismaComment, Message as PrismaMessage } from '@prisma/client';
 import { NotificationType } from '../client/interfaces/enums';
+
+type Comment = PrismaComment & {
+  user: {
+    id: string;
+    name: string;
+    role: UserRole;
+  };
+};
+
+type Message = PrismaMessage & {
+  sender: {
+    id: string;
+    name: string;
+    role: UserRole;
+  };
+};
 
 @Injectable()
 export class ChatService {
@@ -106,12 +122,12 @@ export class ChatService {
       throw new NotFoundException('Chat not found');
     }
 
-    const moderator = await this.prisma.user.findUnique({
-      where: { id: moderatorId },
-    });
+    const isAlreadyModerator = chat.participants.some(
+      p => p.userId === moderatorId && p.role === 'MODERATOR'
+    );
 
-    if (!moderator || moderator.role !== UserRole.MODERATOR) {
-      throw new ForbiddenException('User is not a moderator');
+    if (isAlreadyModerator) {
+      return chat;
     }
 
     const updatedChat = await this.prisma.chat.update({
@@ -120,9 +136,9 @@ export class ChatService {
         participants: {
           create: {
             userId: moderatorId,
-            role: ChatParticipantRole.MODERATOR,
-          },
-        },
+            role: 'MODERATOR'
+          }
+        }
       },
       include: {
         participants: {
@@ -266,6 +282,28 @@ export class ChatService {
    * @throws NotFoundException if chat not found
    */
   async getDisputeChat(disputeId: string, userId: string) {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: true,
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is a participant or moderator
+    const isParticipant = userId === dispute.transaction.customerId || 
+                         userId === dispute.transaction.exchangerId;
+    const isModerator = await this.prisma.user.findFirst({
+      where: { id: userId, role: 'MODERATOR' }
+    });
+
+    if (!isParticipant && !isModerator) {
+      throw new ForbiddenException('User is not authorized to view this dispute chat');
+    }
+
     const chat = await this.prisma.chat.findFirst({
       where: {
         disputeId,
@@ -287,6 +325,20 @@ export class ChatService {
             },
           },
         },
+        messages: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                role: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     });
 
@@ -295,5 +347,225 @@ export class ChatService {
     }
 
     return chat;
+  }
+
+  /**
+   * Adds a comment to a dispute chat
+   * @param disputeId - ID of the dispute
+   * @param userId - ID of the user adding the comment
+   * @param text - Comment text
+   * @returns Created comment
+   * @throws NotFoundException if dispute not found
+   * @throws ForbiddenException if user is not authorized to comment
+   */
+  async addDisputeComment(disputeId: string, userId: string, text: string) {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: true,
+        moderator: true,
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is a participant or moderator
+    const isParticipant = userId === dispute.transaction.customerId || 
+                         userId === dispute.transaction.exchangerId;
+    const isModerator = await this.prisma.user.findFirst({
+      where: { id: userId, role: 'MODERATOR' }
+    });
+
+    if (!isParticipant && !isModerator) {
+      throw new ForbiddenException('User is not authorized to comment on this dispute');
+    }
+
+    const comment = await this.prisma.comment.create({
+      data: {
+        disputeId,
+        userId,
+        text,
+        isModerator: !!isModerator
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    // Notify other participants
+    const otherParticipantId = userId === dispute.transaction.customerId 
+      ? dispute.transaction.exchangerId 
+      : dispute.transaction.customerId;
+
+    await this.kafka.sendEvent({
+      type: NotificationType.DISPUTE_COMMENT_ADDED,
+      payload: { disputeId, commentId: comment.id }
+    });
+
+    this.notificationsGateway.notifyUser(otherParticipantId, NotificationType.DISPUTE_COMMENT_ADDED, {
+      disputeId,
+      commentId: comment.id
+    });
+
+    return comment;
+  }
+
+  /**
+   * Gets all comments for a dispute
+   * @param disputeId - ID of the dispute
+   * @returns Array of comments
+   * @throws NotFoundException if dispute not found
+   */
+  async getDisputeComments(disputeId: string, userId: string): Promise<Comment[]> {
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: true,
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is a participant or moderator
+    const isParticipant = userId === dispute.transaction.customerId || 
+                         userId === dispute.transaction.exchangerId;
+    const isModerator = await this.prisma.user.findFirst({
+      where: { id: userId, role: 'MODERATOR' }
+    });
+
+    if (!isParticipant && !isModerator) {
+      throw new ForbiddenException('User is not authorized to view dispute comments');
+    }
+
+    const comments = await this.prisma.comment.findMany({
+      where: { disputeId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    return comments;
+  }
+
+  private async checkModeratorPermissions(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+    return user?.role === UserRole.MODERATOR;
+  }
+
+  async getChatHistory(chatId: string, userId: string, page = 1, limit = 50) {
+    const isModerator = await this.checkModeratorPermissions(userId);
+    if (!isModerator) {
+      throw new ForbiddenException('Only moderators can view chat history');
+    }
+
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      include: {
+        participants: {
+          include: {
+            user: true
+          }
+        },
+        messages: {
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                role: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    return chat;
+  }
+
+  async addModeratorComment(disputeId: string, moderatorId: string, text: string) {
+    const isModerator = await this.checkModeratorPermissions(moderatorId);
+    if (!isModerator) {
+      throw new ForbiddenException('Only moderators can add moderator comments');
+    }
+
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        chat: {
+          include: {
+            participants: true
+          }
+        },
+        transaction: true
+      }
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    const comment = await this.prisma.comment.create({
+      data: {
+        text,
+        disputeId,
+        userId: moderatorId,
+        isModerator: true
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    // Notify participants about moderator comment
+    const participants = [dispute.transaction.customerId, dispute.transaction.exchangerId];
+    for (const participantId of participants) {
+      if (participantId !== moderatorId) {
+        await this.kafka.sendEvent({
+          type: NotificationType.MODERATOR_COMMENT_ADDED,
+          payload: { disputeId, commentId: comment.id, userId: participantId }
+        });
+
+        this.notificationsGateway.notifyUser(participantId, NotificationType.MODERATOR_COMMENT_ADDED, {
+          disputeId,
+          commentId: comment.id
+        });
+      }
+    }
+
+    return comment;
   }
 } 

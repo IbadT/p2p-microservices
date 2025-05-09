@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package balance;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service BalanceService {
   rpc GetBalance (GetBalanceRequest) returns (Balance);
   rpc CreateHold (CreateHoldRequest) returns (BalanceHold);
@@ -11,6 +15,10 @@ service BalanceService {
   rpc Withdraw (WithdrawRequest) returns (Balance);
   rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message Empty {}
 

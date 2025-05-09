@@ -9,6 +9,7 @@ import { CreateAuditLogDto } from '../interfaces/client.swagger';
 import { CreateReviewDto } from '../interfaces/client.swagger';
 import { CreateTaskDto } from 'src/scheduler/dto/create-task.dto';
 import { BalanceResponse, BalanceHoldResponse, TransactionHistoryResponse } from './balance.swagger';
+import { ChatHistory, Comment } from '../interfaces/client.swagger';
 
 class ExchangerStatus {
   exchangerId: string;
@@ -693,4 +694,49 @@ export function ApiGetOpenDisputes() {
     ApiResponse({ status: 401, description: 'Unauthorized' }),
     ApiResponse({ status: 403, description: 'Forbidden - User is not a moderator or admin' })
   );
-} 
+}
+
+export const ApiGetDisputeChat = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get dispute chat history' }),
+    ApiResponse({
+      status: 200,
+      description: 'Returns the chat history for the dispute',
+      type: ChatHistory
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Bad request or unauthorized'
+    })
+  );
+};
+
+export const ApiGetDisputeComments = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get dispute comments' }),
+    ApiResponse({
+      status: 200,
+      description: 'Returns all comments for the dispute',
+      type: [Comment]
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Bad request or unauthorized'
+    })
+  );
+};
+
+export const ApiAddDisputeComment = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Add comment to dispute' }),
+    ApiResponse({
+      status: 201,
+      description: 'Comment added successfully',
+      type: Comment
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Bad request or unauthorized'
+    })
+  );
+}; 

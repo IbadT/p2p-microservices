@@ -2,12 +2,20 @@ syntax = "proto3";
 
 package scheduler;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service SchedulerService {
   rpc CreateScheduledTask (CreateScheduledTaskRequest) returns (ScheduledTask) {}
   rpc UpdateScheduledTask (UpdateScheduledTaskRequest) returns (ScheduledTask) {}
   rpc GetScheduledTask (GetScheduledTaskRequest) returns (ScheduledTask) {}
   rpc ListScheduledTasks (ListScheduledTasksRequest) returns (ScheduledTasksResponse) {}
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateScheduledTaskRequest {
   string name = 1;

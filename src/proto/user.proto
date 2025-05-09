@@ -2,11 +2,19 @@ syntax = "proto3";
 
 package user;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service UserService {
   rpc CreateUser (CreateUserRequest) returns (User) {}
   rpc UpdateUser (UpdateUserRequest) returns (User) {}
   rpc GetUser (GetUserRequest) returns (User) {}
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateUserRequest {
   string email = 1;

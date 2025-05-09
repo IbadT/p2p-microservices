@@ -2,11 +2,36 @@ syntax = "proto3";
 
 package disputes;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service DisputeService {
   rpc CreateDispute (CreateDisputeRequest) returns (Dispute);
   rpc ResolveDispute (ResolveDisputeRequest) returns (Dispute);
   rpc GetDisputesByUser (GetDisputesByUserRequest) returns (GetDisputesByUserResponse);
   rpc GetOpenDisputes (GetOpenDisputesRequest) returns (GetOpenDisputesResponse);
+  rpc GetDisputeChat (GetDisputeChatRequest) returns (Chat);
+  rpc AddDisputeComment (AddDisputeCommentRequest) returns (Comment);
+  rpc GetDisputeComments (GetDisputeCommentsRequest) returns (GetDisputeCommentsResponse);
+}
+
+// ------------------------------
+// Messages
+// ------------------------------
+
+message User {
+  string id = 1;
+  string name = 2;
+  string role = 3;
+}
+
+message Chat {
+  string id = 1;
+  string type = 2;
+  string disputeId = 3;
+  string createdAt = 4;
+  string updatedAt = 5;
 }
 
 message CreateDisputeRequest {
@@ -47,4 +72,34 @@ message Dispute {
   string winnerUserId = 8;
   string createdAt = 9;
   string updatedAt = 10;
+}
+
+message GetDisputeChatRequest {
+  string disputeId = 1;
+  string userId = 2;
+}
+
+message AddDisputeCommentRequest {
+  string disputeId = 1;
+  string userId = 2;
+  string text = 3;
+}
+
+message GetDisputeCommentsRequest {
+  string disputeId = 1;
+  string userId = 2;
+}
+
+message GetDisputeCommentsResponse {
+  repeated Comment comments = 1;
+}
+
+message Comment {
+  string id = 1;
+  string disputeId = 2;
+  string userId = 3;
+  string text = 4;
+  bool isModerator = 5;
+  string createdAt = 6;
+  User user = 7;
 } 

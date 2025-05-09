@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Query } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
@@ -19,6 +19,9 @@ import { Roles } from 'src/shared/decorators/roles.decorator';
 import { RolesGuard } from 'src/shared/guards/roles.guard';
 import { UserRole } from 'src/shared/decorators/roles.decorator';
 import { User } from 'src/shared/decorators/user.decorator';
+import { Chat, Comment } from '../proto/generated/chat.pb';
+import { Comment as PrismaComment } from '@prisma/client';
+import { GetChatHistoryResponse } from '../proto/generated/chat.pb';
 
 @ApiTags('Disputes')
 @Controller('disputes')
@@ -154,5 +157,66 @@ export class DisputesController {
   async getOpenDisputes(data: GetOpenDisputesRequest): Promise<GetOpenDisputesResponse> {
     const disputes = await this.findAll();
     return { disputes };
+  }
+
+  @GrpcMethod('DisputeService', 'GetDisputeChat')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  async getDisputeChat(data: { 
+    disputeId: string; 
+    userId: string;
+    page?: number;
+    limit?: number;
+  }): Promise<GetChatHistoryResponse> {
+    const page = data.page || 1;
+    const limit = data.limit || 20;
+    
+    return this.disputesService.getDisputeChat(data.disputeId, data.userId, page, limit);
+  }
+
+  @GrpcMethod('DisputeService', 'AddDisputeComment')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  async addDisputeComment(data: { 
+    disputeId: string; 
+    userId: string; 
+    text: string;
+    isModeratorComment: boolean;
+  }): Promise<Comment> {
+    const comment = await this.disputesService.addDisputeComment(
+      data.disputeId, 
+      data.userId, 
+      data.text,
+      true // Always true for moderator comments
+    );
+
+    // Notify dispute participants about the new moderator comment
+    await this.disputesService.notifyAboutModeratorComment(data.disputeId, comment);
+    
+    return comment;
+  }
+
+  @GrpcMethod('DisputeService', 'GetDisputeComments')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.CUSTOMER, UserRole.EXCHANGER)
+  async getDisputeComments(data: { 
+    disputeId: string; 
+    userId: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = data.page || 1;
+    const limit = data.limit || 20;
+    
+    const comments = await this.disputesService.getDisputeComments(
+      data.disputeId, 
+      data.userId,
+      page,
+      limit
+    );
+    
+    return {
+      comments: comments.map(comment => ({
+        ...comment,
+        is_moderator: comment.isModeratorComment
+      }))
+    };
   }
 }

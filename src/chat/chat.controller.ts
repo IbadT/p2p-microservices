@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Query, BadRequestException } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles, UserRole } from '../shared/decorators/roles.decorator';
 import { User } from '../shared/decorators/user.decorator';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { 
   ApiCreateDisputeChat, 
   ApiAddModeratorToChat, 
@@ -73,6 +73,41 @@ export class ChatController {
     return this.chatService.getDisputeChat(disputeId, userId);
   }
 
+  @Get(':chatId/history')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MODERATOR)
+  @ApiOperation({ summary: 'Get chat history' })
+  @ApiResponse({ status: 200, description: 'Returns chat history' })
+  async getChatHistory(
+    @Param('chatId') chatId: string,
+    @User('id') userId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
+  ) {
+    try {
+      return await this.chatService.getChatHistory(chatId, userId, page, limit);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Post(':disputeId/moderator-comment')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MODERATOR)
+  @ApiOperation({ summary: 'Add moderator comment to dispute' })
+  @ApiResponse({ status: 201, description: 'Comment added successfully' })
+  async addModeratorComment(
+    @Param('disputeId') disputeId: string,
+    @User('id') moderatorId: string,
+    @Body('text') text: string,
+  ) {
+    try {
+      return await this.chatService.addModeratorComment(disputeId, moderatorId, text);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   /**
    * gRPC method to create a dispute chat
    * @param data - Object containing disputeId and userId
@@ -121,5 +156,35 @@ export class ChatController {
   @GrpcMethod('ChatService', 'GetDisputeChat')
   async getDisputeChatGrpc(data: { disputeId: string; userId: string }) {
     return this.chatService.getDisputeChat(data.disputeId, data.userId);
+  }
+
+  /**
+   * gRPC method to add a comment to a dispute
+   * @param data - Object containing disputeId, userId and text
+   * @returns Created comment
+   */
+  @GrpcMethod('ChatService', 'AddDisputeComment')
+  async addDisputeCommentGrpc(data: { disputeId: string; userId: string; text: string }) {
+    return this.chatService.addDisputeComment(data.disputeId, data.userId, data.text);
+  }
+
+  /**
+   * gRPC method to get all comments for a dispute
+   * @param data - Object containing disputeId and userId
+   * @returns Array of comments
+   */
+  @GrpcMethod('ChatService', 'GetDisputeComments')
+  async getDisputeCommentsGrpc(data: { disputeId: string; userId: string }) {
+    return this.chatService.getDisputeComments(data.disputeId, data.userId);
+  }
+
+  @GrpcMethod('ChatService', 'GetChatHistory')
+  async getChatHistoryGrpc(data: { chatId: string; userId: string; page?: number; limit?: number }) {
+    return this.chatService.getChatHistory(data.chatId, data.userId, data.page, data.limit);
+  }
+
+  @GrpcMethod('ChatService', 'AddModeratorComment')
+  async addModeratorCommentGrpc(data: { disputeId: string; moderatorId: string; text: string }) {
+    return this.chatService.addModeratorComment(data.disputeId, data.moderatorId, data.text);
   }
 } 

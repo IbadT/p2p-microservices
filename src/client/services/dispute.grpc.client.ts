@@ -3,6 +3,21 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { BaseGrpcClient } from '../base/base.grpc.client';
 import { DISPUTE_SERVICE } from '../constants';
 import { CreateDisputeDto, ResolveDisputeDto } from '../interfaces/client.swagger';
+import {
+  GetOpenDisputesResponse,
+  GetDisputeCommentsResponse,
+  GetDisputeChatRequest,
+  GetDisputeCommentsRequest,
+  AddDisputeCommentRequest,
+  GetOpenDisputesRequest,
+  GetDisputesByUserRequest,
+  GetDisputesByUserResponse,
+  Dispute,
+  Chat,
+  Comment,
+  DisputeServiceClient
+} from '../../proto/generated/disputes.pb';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class DisputeGrpcClient extends BaseGrpcClient {
@@ -13,58 +28,83 @@ export class DisputeGrpcClient extends BaseGrpcClient {
   }
 
   /**
-   * Создает новый спор
-   * @param dto - Данные для создания спора
-   * @returns {Promise<Dispute>} Созданный спор
+   * Creates a new dispute
+   * @param dto - Data for creating a dispute
+   * @returns {Promise<Dispute>} Created dispute
    */
-  async createDispute(dto: CreateDisputeDto) {
+  async createDispute(dto: CreateDisputeDto): Promise<Dispute> {
     const service = this.getService<any>('DisputeService');
-    return this.callGrpcMethod(service.createDispute, dto);
+    return firstValueFrom(service.createDispute(dto));
   }
 
   /**
-   * Разрешает спор
-   * @param dto - Данные для разрешения спора
-   * @returns {Promise<Dispute>} Разрешенный спор
+   * Resolves a dispute
+   * @param dto - Data for resolving a dispute
+   * @returns {Promise<Dispute>} Resolved dispute
    */
-  async resolveDispute(dto: ResolveDisputeDto) {
+  async resolveDispute(dto: ResolveDisputeDto): Promise<Dispute> {
     const service = this.getService<any>('DisputeService');
-    return this.callGrpcMethod(service.resolveDispute, dto);
+    return firstValueFrom(service.resolveDispute(dto));
   }
 
   /**
-   * Получает спор по ID
-   * @param disputeId - ID спора
-   * @returns {Promise<Dispute>} Спор
+   * Gets a dispute by ID
+   * @param disputeId - ID of the dispute
+   * @returns {Promise<Dispute>} Dispute
    */
-  async getDispute(disputeId: string) {
+  async getDispute(disputeId: string): Promise<Dispute> {
     const service = this.getService<any>('DisputeService');
-    return this.callGrpcMethod(service.getDispute, { disputeId });
+    return firstValueFrom(service.getDispute({ disputeId }));
   }
 
   /**
-   * Получает список споров пользователя
-   * @param userId - ID пользователя
-   * @returns {Promise<Dispute[]>} Список споров
+   * Gets user's disputes
+   * @param userId - ID of the user
+   * @returns {Promise<GetDisputesByUserResponse>} List of disputes
    */
-  async getUserDisputes(userId: string) {
+  async getUserDisputes(userId: string): Promise<GetDisputesByUserResponse> {
     const service = this.getService<any>('DisputeService');
-    return this.callGrpcMethod(service.getUserDisputes, { userId });
+    const request: GetDisputesByUserRequest = { userId };
+    return firstValueFrom(service.getDisputesByUser(request));
   }
 
   /**
-   * Добавляет комментарий к спору
-   * @param disputeId - ID спора
-   * @param userId - ID пользователя
-   * @param text - Текст комментария
-   * @returns {Promise<DisputeComment>} Созданный комментарий
+   * Gets open disputes
+   * @returns {Promise<GetOpenDisputesResponse>} List of open disputes
    */
-  async addComment(disputeId: string, userId: string, text: string) {
+  async getOpenDisputes(): Promise<GetOpenDisputesResponse> {
     const service = this.getService<any>('DisputeService');
-    return this.callGrpcMethod(service.addComment, {
-      disputeId,
-      userId,
-      text,
-    });
+    const request: GetOpenDisputesRequest = {};
+    return firstValueFrom(service.getOpenDisputes(request));
+  }
+
+  /**
+   * Gets dispute chat
+   * @param request - Request data
+   * @returns {Promise<Chat>} Chat
+   */
+  async getDisputeChat(request: GetDisputeChatRequest): Promise<Chat> {
+    const service = this.getService<any>('DisputeService');
+    return firstValueFrom(service.getDisputeChat(request));
+  }
+
+  /**
+   * Gets dispute comments
+   * @param request - Request data
+   * @returns {Promise<GetDisputeCommentsResponse>} Comments
+   */
+  async getDisputeComments(request: GetDisputeCommentsRequest): Promise<GetDisputeCommentsResponse> {
+    const service = this.getService<any>('DisputeService');
+    return firstValueFrom(service.getDisputeComments(request));
+  }
+
+  /**
+   * Adds a comment to a dispute
+   * @param request - Request data
+   * @returns {Promise<Comment>} Created comment
+   */
+  async addComment(request: AddDisputeCommentRequest): Promise<Comment> {
+    const service = this.getService<any>('DisputeService');
+    return firstValueFrom(service.addDisputeComment(request));
   }
 } 

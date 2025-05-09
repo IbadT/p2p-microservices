@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package listings;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service ListingsService {
   rpc CreateListing (CreateListingRequest) returns (CreateListingResponse);
   rpc GetListing (GetListingRequest) returns (GetListingResponse);
@@ -9,6 +13,10 @@ service ListingsService {
   rpc UpdateListing (UpdateListingRequest) returns (UpdateListingResponse);
   rpc DeleteListing (DeleteListingRequest) returns (DeleteListingResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message CreateListingRequest {
   string userId = 1;

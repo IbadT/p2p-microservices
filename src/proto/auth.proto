@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package auth;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service AuthService {
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc Register (RegisterRequest) returns (RegisterResponse);
@@ -9,6 +13,10 @@ service AuthService {
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message LoginRequest {
   string email = 1;

@@ -71,6 +71,11 @@ export class ChatsGatewayController {
     @Param('disputeId') disputeId: string,
     @Query() query: GetDisputeChatQueryDto,
   ) {
-    return this.chatGrpcClient.getDisputeChat(disputeId, query.userId);
+    return this.chatGrpcClient.getDisputeChat({
+      disputeId,
+      userId: query.userId,
+      page: query.page || 1,
+      limit: query.limit || 20
+    });
   }
 } 

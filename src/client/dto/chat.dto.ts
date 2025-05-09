@@ -51,4 +51,16 @@ export class GetDisputeChatQueryDto {
   @IsString()
   @IsNotEmpty()
   userId: string;
+
+  @ApiProperty({ description: 'Page number', default: 1 })
+  @IsNumber()
+  @Min(1)
+  @IsOptional()
+  page?: number = 1;
+
+  @ApiProperty({ description: 'Number of items per page', default: 20 })
+  @IsNumber()
+  @Min(1)
+  @IsOptional()
+  limit?: number = 20;
 } 

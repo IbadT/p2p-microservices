@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Logger } from '@nestjs/common';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { CreateDisputeDto, ResolveDisputeDto, AddCommentDto } from './interfaces/client.swagger';
@@ -10,93 +10,215 @@ import {
   ApiResolveDispute,
   ApiAddComment,
   ApiGetMyDisputes,
-  ApiGetOpenDisputes
+  ApiGetOpenDisputes,
+  ApiGetDisputeChat,
+  ApiGetDisputeComments,
+  ApiAddDisputeComment
 } from './swagger/client.swagger';
-import { ClientGrpc } from '@nestjs/microservices';
-import { DISPUTE_SERVICE } from './constants';
-import { Roles } from 'src/shared/decorators/roles.decorator';
-import { RolesGuard } from 'src/shared/guards/roles.guard';
-import { UserRole } from 'src/shared/decorators/roles.decorator';
-import { User } from 'src/shared/decorators/user.decorator';
+import { Roles } from '../shared/decorators/roles.decorator';
+import { RolesGuard } from '../shared/guards/roles.guard';
+import { UserRole } from '../shared/decorators/roles.decorator';
+import { User } from '../shared/decorators/user.decorator';
+import { firstValueFrom, Observable } from 'rxjs';
+import { Chat, Comment, GetDisputeCommentsResponse, Dispute, GetDisputesByUserResponse, GetOpenDisputesResponse, GetDisputeChatRequest, GetDisputeCommentsRequest, AddDisputeCommentRequest, GetOpenDisputesRequest, GetDisputesByUserRequest } from '../proto/generated/disputes.pb';
+import { ExchangeType, TransactionStatus, DisputeStatus } from '@prisma/client';
+import { DisputeGrpcClient } from './services/dispute.grpc.client';
 
 @ApiTags('Disputes')
 @Controller('disputes')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiSecurity('JWT-auth')
 export class DisputesGatewayController {
-  private disputeService: any;
+  private readonly logger = new Logger(DisputesGatewayController.name);
 
-  constructor(
-    @Inject(DISPUTE_SERVICE) private readonly client: ClientGrpc
-  ) {
-    this.disputeService = this.client.getService('DisputeService');
+  constructor(private readonly disputeClient: DisputeGrpcClient) {}
+
+  private mapDisputeToDisputeWithRelations(dispute: Dispute): DisputeWithRelations {
+    return {
+      id: dispute.id,
+      transactionId: dispute.transactionId,
+      initiatorId: dispute.initiatorId,
+      reason: dispute.reason,
+      status: dispute.status as DisputeStatus,
+      moderatorId: dispute.moderatorId || null,
+      resolution: dispute.resolution || null,
+      resolvedAt: null,
+      createdAt: new Date(dispute.createdAt),
+      updatedAt: new Date(dispute.updatedAt),
+      transaction: {
+        id: dispute.transactionId,
+        type: ExchangeType.CRYPTO_TO_FIAT,
+        status: TransactionStatus.DISPUTE_OPEN,
+        cryptocurrency: '',
+        fiatCurrency: '',
+        cryptoAmount: 0,
+        fiatAmount: 0,
+        paymentProof: null,
+        disputeId: dispute.id,
+        confirmationDeadline: new Date(),
+        canCustomerDispute: true,
+        canExchangerDispute: true,
+        isActive: true,
+        customerId: dispute.initiatorId,
+        exchangerId: '',
+        listingId: '',
+        offerId: null,
+        createdAt: new Date(dispute.createdAt),
+        updatedAt: new Date(dispute.updatedAt),
+        finishedAt: null,
+        customer: {
+          id: dispute.initiatorId,
+          email: ''
+        },
+        exchanger: {
+          id: '',
+          email: ''
+        }
+      }
+    };
   }
 
   @Post()
   @Roles(UserRole.CUSTOMER, UserRole.EXCHANGER)
   @ApiCreateDispute()
   async create(@Body() dto: CreateDisputeDto): Promise<DisputeWithRelations> {
-    const dispute = await this.disputeService.createDispute({
-      transactionId: dto.transactionId,
-      initiatorId: dto.initiatorId,
-      reason: dto.reason
-    }).toPromise();
-    return dispute;
+    try {
+      const dispute = await this.disputeClient.createDispute(dto);
+      if (!dispute) {
+        throw new BadRequestException('Failed to create dispute');
+      }
+      return this.mapDisputeToDisputeWithRelations(dispute);
+    } catch (error) {
+      this.logger.error(`Failed to create dispute: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to create dispute');
+    }
   }
 
   @Get()
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
   @ApiGetAllDisputes()
   async findAll(): Promise<DisputeWithRelations[]> {
-    const response = await this.disputeService.getOpenDisputes({}).toPromise();
-    return response.disputes;
+    try {
+      const response = await this.disputeClient.getOpenDisputes();
+      if (!response?.disputes) {
+        return [];
+      }
+      return response.disputes.map(dispute => this.mapDisputeToDisputeWithRelations(dispute));
+    } catch (error) {
+      this.logger.error(`Failed to get all disputes: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to get disputes');
+    }
   }
 
   @Get('my')
   @ApiGetMyDisputes()
   async getMyDisputes(@User('id') userId: string): Promise<DisputeWithRelations[]> {
-    const response = await this.disputeService.getDisputesByUser({ userId }).toPromise();
-    return response.disputes;
-  }
-
-  @Get('open')
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  @ApiGetOpenDisputes()
-  async getOpenDisputes(): Promise<DisputeWithRelations[]> {
-    const response = await this.disputeService.getOpenDisputes({}).toPromise();
-    return response.disputes;
+    try {
+      const response = await this.disputeClient.getUserDisputes(userId);
+      if (!response?.disputes) {
+        return [];
+      }
+      return response.disputes.map(dispute => this.mapDisputeToDisputeWithRelations(dispute));
+    } catch (error) {
+      this.logger.error(`Failed to get user disputes: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to get disputes');
+    }
   }
 
   @Get(':id')
   @ApiGetDisputeById()
   async findOne(@Param('id') id: string): Promise<DisputeWithRelations> {
-    const response = await this.disputeService.getDisputesByUser({ userId: id }).toPromise();
-    const dispute = response.disputes.find(d => d.id === id);
-    if (!dispute) {
-      throw new BadRequestException('Dispute not found');
+    try {
+      const dispute = await this.disputeClient.getDispute(id);
+      if (!dispute) {
+        throw new BadRequestException('Dispute not found');
+      }
+      return this.mapDisputeToDisputeWithRelations(dispute);
+    } catch (error) {
+      this.logger.error(`Failed to get dispute: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to get dispute');
     }
-    return dispute;
   }
 
   @Post(':id/resolve')
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
   @ApiResolveDispute()
-  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto): Promise<void> {
-    await this.disputeService.resolveDispute({
-      disputeId: id,
-      moderatorId: dto.moderatorId,
-      resolution: dto.resolution,
-      winnerUserId: dto.winnerUserId
-    }).toPromise();
+  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto): Promise<DisputeWithRelations> {
+    try {
+      const resolvedDispute = await this.disputeClient.resolveDispute({
+        disputeId: id,
+        moderatorId: dto.moderatorId,
+        resolution: dto.resolution,
+        winnerUserId: dto.winnerUserId
+      });
+
+      if (!resolvedDispute) {
+        throw new BadRequestException('Failed to resolve dispute');
+      }
+
+      return this.mapDisputeToDisputeWithRelations(resolvedDispute);
+    } catch (error) {
+      this.logger.error(`Failed to resolve dispute ${id}: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to resolve dispute');
+    }
+  }
+
+  @Get(':id/chat')
+  @ApiGetDisputeChat()
+  async getDisputeChat(@Param('id') id: string, @User('id') userId: string): Promise<Chat> {
+    try {
+      const request: GetDisputeChatRequest = {
+        disputeId: id,
+        userId
+      };
+      const chat = await this.disputeClient.getDisputeChat(request);
+      if (!chat) {
+        throw new BadRequestException('Chat not found');
+      }
+      return chat;
+    } catch (error) {
+      this.logger.error(`Failed to get dispute chat: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to get dispute chat');
+    }
+  }
+
+  @Get(':id/comments')
+  @ApiGetDisputeComments()
+  async getDisputeComments(@Param('id') id: string, @User('id') userId: string): Promise<Comment[]> {
+    try {
+      const request: GetDisputeCommentsRequest = {
+        disputeId: id,
+        userId
+      };
+      const response = await this.disputeClient.getDisputeComments(request);
+      return response?.comments || [];
+    } catch (error) {
+      this.logger.error(`Failed to get dispute comments: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to get dispute comments');
+    }
   }
 
   @Post(':id/comments')
-  @ApiAddComment()
-  async addComment(@Param('id') id: string, @Body() dto: AddCommentDto): Promise<void> {
-    await this.disputeService.addDisputeComment({
-      disputeId: id,
-      userId: dto.userId,
-      text: dto.text
-    }).toPromise();
+  @ApiAddDisputeComment()
+  async addDisputeComment(
+    @Param('id') id: string,
+    @User('id') userId: string,
+    @Body() dto: AddCommentDto
+  ): Promise<Comment> {
+    try {
+      const request: AddDisputeCommentRequest = {
+        disputeId: id,
+        userId,
+        text: dto.text
+      };
+      const comment = await this.disputeClient.addComment(request);
+      if (!comment) {
+        throw new BadRequestException('Failed to add comment');
+      }
+      return comment;
+    } catch (error) {
+      this.logger.error(`Failed to add dispute comment: ${error.message}`);
+      throw new BadRequestException(error.message || 'Failed to add dispute comment');
+    }
   }
 } 

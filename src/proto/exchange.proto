@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package exchange;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service ExchangeService {
   // Listing Operations
   rpc CreateListing (CreateListingRequest) returns (ExchangeListing);
@@ -25,6 +29,10 @@ service ExchangeService {
   rpc GetExchangerStatus (GetExchangerStatusRequest) returns (ExchangerStatus);
   rpc UnfreezeExchanger (UnfreezeExchangerRequest) returns (ExchangerStatus);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 // Enums
 enum ExchangeType {

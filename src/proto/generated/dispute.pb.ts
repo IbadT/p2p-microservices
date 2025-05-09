@@ -25,6 +25,7 @@ export interface ResolveDisputeRequest {
   moderatorId: string;
   resolution: string;
   winnerUserId: string;
+  finalStatus: string;
 }
 
 export interface Dispute {
@@ -38,6 +39,8 @@ export interface Dispute {
   moderatorId?: string | undefined;
   createdAt: string;
   updatedAt: string;
+  winnerUserId?: string | undefined;
+  finalStatus?: string | undefined;
 }
 
 export interface GetDisputesByUserRequest {

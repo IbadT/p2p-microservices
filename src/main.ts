@@ -10,42 +10,8 @@ import { join } from 'path';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { ValidationPipe } from '@nestjs/common';
 
-declare const module: any;
-
-async function bootstrap() {
-  const logger = new Logger();
-  const app = await NestFactory.create(AppModule);
-
-  app.useGlobalFilters(
-    new SentryExceptionFilter(),
-    new PrismaExceptionFilter(),
-  );
-
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-  }));
-
-  app.setGlobalPrefix('api');
-
-  app.enableCors({
-    origin: '*',
-    credentials: true,
-  });
-
-  const configService = app.get(ConfigService);
-  const PORT = configService.get<string>('PORT') ?? 4200;
-  const NODE_ENV = configService.get<string>('NODE_ENV');
-  const GRPC_URL = configService.get<string>('GRPC_URL');
-  const KAFKA_BROKER = configService.get<string>('KAFKA_BROKER');
-  const SENTRY_DNS = configService.get<string>('SENTRY_DNS');
-
-  app.setGlobalPrefix('api');
-
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('P2P Платформа Обмена Криптовалют')
-    .setDescription(`
-      API документация для P2P платформы обмена криптовалют.
+const swaggerDescription = `
+API документация для P2P платформы обмена криптовалют.
       
       Основные возможности:
       • Безопасная аутентификация и авторизация пользователей
@@ -128,52 +94,9 @@ async function bootstrap() {
       • GET /chats - Получение списка чатов
       • GET /chats/{id} - Получение информации о чате
       • PUT /chats/{id} - Обновление чата
-      • DELETE /chats/{id} - Удаление чата
-    `)
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addTag('Auth', 'Авторизация - Эндпоинты для аутентификации и авторизации пользователей. Включает регистрацию, вход, обновление токенов и управление сессиями.')
-    .addTag('Listings', 'Объявления - Управление объявлениями об обмене. Создание, редактирование, поиск и фильтрация объявлений о покупке/продаже криптовалют.')
-    .addTag('Offers', 'Предложения - Управление предложениями обмена. Создание, принятие, отклонение и отмена предложений по обмену криптовалют.')
-    .addTag('Transactions', 'Транзакции - Управление транзакциями обмена. Отслеживание статуса, подтверждение платежей и управление процессом обмена.')
-    .addTag('Disputes', 'Споры - Система разрешения споров. Создание споров, загрузка доказательств и процесс модерации конфликтных ситуаций.')
-    .addTag('Users', 'Пользователи - Управление пользователями. Профили, настройки, верификация и управление правами доступа.')
-    .addTag('Balance', 'Баланс - Операции с балансом. Просмотр, пополнение, вывод средств и история транзакций.')
-    .addTag('Reviews', 'Отзывы - Система отзывов. Создание, просмотр и модерация отзывов о пользователях и обменах.')
-    .addTag('Exchanges', 'Обмены - Управление обменами. Создание, отслеживание и управление процессом обмена криптовалют.')
-    .addTag('Audit', 'Аудит - Система аудита. Логирование действий пользователей, модераторов и системных событий.')
-    .addTag('Scheduler', 'Планировщик - Управление запланированными задачами. Автоматические операции, уведомления и системные процессы.')
-    .addTag('Notifications', 'Уведомления - Управление уведомлениями. Настройка, отправка и получение системных уведомлений и оповещений.')
-    .addTag('Health', 'Мониторинг - Система мониторинга состояния сервиса. Проверка работоспособности компонентов, метрики производительности и статус зависимостей.')
-    .addTag('Chats', 'Чаты - Управление чатами и сообщениями.')
-    .build();
+      • DELETE /chats/{id} - Удаление чата`;
 
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
-    deepScanRoutes: true,
-    // ignoreGlobalPrefix: true,
-  });
-
-  // Enable Swagger in all environments
-  SwaggerModule.setup('api', app, swaggerDocument, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none',
-      filter: true,
-      showRequestDuration: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-    customSiteTitle: 'P2P Exchange Platform API Documentation',
-    customCss: `
+const swaggerCustomCss = `
       .swagger-ui .opblock-tag {
         border-radius: 4px;
         margin: 0 0 5px;
@@ -235,7 +158,87 @@ async function bootstrap() {
         background-color: #e8f5e9;
         border: 1px solid #4caf50;
       }
-    `
+    `;
+
+declare const module: any;
+
+async function bootstrap() {
+  const logger = new Logger();
+  const app = await NestFactory.create(AppModule);
+
+  app.useGlobalFilters(
+    new SentryExceptionFilter(),
+    new PrismaExceptionFilter(),
+  );
+
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true,
+  }));
+
+  app.setGlobalPrefix('api');
+
+  app.enableCors({
+    origin: '*',
+    credentials: true,
+  });
+
+  const configService = app.get(ConfigService);
+  const PORT = configService.get<string>('PORT') ?? 4200;
+  const NODE_ENV = configService.get<string>('NODE_ENV');
+  const GRPC_URL = configService.get<string>('GRPC_URL');
+  const KAFKA_BROKER = configService.get<string>('KAFKA_BROKER');
+  const SENTRY_DNS = configService.get<string>('SENTRY_DNS');
+
+  app.setGlobalPrefix('api');
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('P2P Платформа Обмена Криптовалют')
+    .setDescription(swaggerDescription)
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .addTag('Auth', 'Авторизация - Эндпоинты для аутентификации и авторизации пользователей. Включает регистрацию, вход, обновление токенов и управление сессиями.')
+    .addTag('Listings', 'Объявления - Управление объявлениями об обмене. Создание, редактирование, поиск и фильтрация объявлений о покупке/продаже криптовалют.')
+    .addTag('Offers', 'Предложения - Управление предложениями обмена. Создание, принятие, отклонение и отмена предложений по обмену криптовалют.')
+    .addTag('Transactions', 'Транзакции - Управление транзакциями обмена. Отслеживание статуса, подтверждение платежей и управление процессом обмена.')
+    .addTag('Disputes', 'Споры - Система разрешения споров. Создание споров, загрузка доказательств и процесс модерации конфликтных ситуаций.')
+    .addTag('Users', 'Пользователи - Управление пользователями. Профили, настройки, верификация и управление правами доступа.')
+    .addTag('Balance', 'Баланс - Операции с балансом. Просмотр, пополнение, вывод средств и история транзакций.')
+    .addTag('Reviews', 'Отзывы - Система отзывов. Создание, просмотр и модерация отзывов о пользователях и обменах.')
+    .addTag('Exchanges', 'Обмены - Управление обменами. Создание, отслеживание и управление процессом обмена криптовалют.')
+    .addTag('Audit', 'Аудит - Система аудита. Логирование действий пользователей, модераторов и системных событий.')
+    .addTag('Scheduler', 'Планировщик - Управление запланированными задачами. Автоматические операции, уведомления и системные процессы.')
+    .addTag('Notifications', 'Уведомления - Управление уведомлениями. Настройка, отправка и получение системных уведомлений и оповещений.')
+    .addTag('Health', 'Мониторинг - Система мониторинга состояния сервиса. Проверка работоспособности компонентов, метрики производительности и статус зависимостей.')
+    .addTag('Chats', 'Чаты - Управление чатами и сообщениями.')
+    .build();
+
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
+    deepScanRoutes: true,
+    // ignoreGlobalPrefix: true,
+  });
+
+  // Enable Swagger in all environments
+  SwaggerModule.setup('api', app, swaggerDocument, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      showRequestDuration: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+    customSiteTitle: 'P2P Exchange Platform API Documentation',
+    customCss: swaggerCustomCss,
   });
 
   // Инициализация Sentry

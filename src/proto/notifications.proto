@@ -2,11 +2,19 @@ syntax = "proto3";
 
 package notifications;
 
+// ------------------------------
+// Service
+// ------------------------------
+
 service NotificationsService {
   rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
   rpc GetNotifications (GetNotificationsRequest) returns (GetNotificationsResponse);
   rpc MarkAsRead (MarkAsReadRequest) returns (MarkAsReadResponse);
 }
+
+// ------------------------------
+// Messages
+// ------------------------------
 
 message SendNotificationRequest {
   string userId = 1;

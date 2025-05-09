@@ -1,13 +1,23 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
+import { 
+  Chat, 
+  Comment, 
+  GetChatMessagesResponse, 
+  GetChatHistoryResponse,
+  GetDisputeCommentsResponse,
+  AddModeratorCommentRequest
+} from '../../proto/generated/chat.pb';
 
 interface ChatService {
-  createDisputeChat(request: { disputeId: string; initiatorId: string }): Observable<any>;
-  addModeratorToChat(request: { chatId: string; moderatorId: string }): Observable<any>;
-  sendMessage(request: { chatId: string; senderId: string; content: string }): Observable<any>;
-  getChatMessages(request: { chatId: string; userId: string; page: number; limit: number }): Observable<any>;
-  getDisputeChat(request: { disputeId: string; userId: string }): Observable<any>;
+  createDisputeChat(request: { disputeId: string; initiatorId: string }): Observable<Chat>;
+  addModeratorToChat(request: { chatId: string; moderatorId: string }): Observable<Chat>;
+  sendMessage(request: { chatId: string; senderId: string; content: string }): Observable<Comment>;
+  getChatMessages(request: { chatId: string; userId: string; page: number; limit: number }): Observable<GetChatMessagesResponse>;
+  getDisputeChat(request: { disputeId: string; userId: string; page: number; limit: number }): Observable<GetChatHistoryResponse>;
+  addModeratorComment(request: AddModeratorCommentRequest): Observable<Comment>;
+  getDisputeComments(request: { disputeId: string; userId: string; page: number; limit: number }): Observable<GetDisputeCommentsResponse>;
 }
 
 @Injectable()
@@ -20,23 +30,31 @@ export class ChatGrpcClient {
     this.chatService = this.client.getService<ChatService>('ChatService');
   }
 
-  createDisputeChat(disputeId: string, initiatorId: string): Observable<any> {
+  createDisputeChat(disputeId: string, initiatorId: string): Observable<Chat> {
     return this.chatService.createDisputeChat({ disputeId, initiatorId });
   }
 
-  addModeratorToChat(chatId: string, moderatorId: string): Observable<any> {
+  addModeratorToChat(chatId: string, moderatorId: string): Observable<Chat> {
     return this.chatService.addModeratorToChat({ chatId, moderatorId });
   }
 
-  sendMessage(chatId: string, senderId: string, content: string): Observable<any> {
+  sendMessage(chatId: string, senderId: string, content: string): Observable<Comment> {
     return this.chatService.sendMessage({ chatId, senderId, content });
   }
 
-  getChatMessages(chatId: string, userId: string, page = 1, limit = 50): Observable<any> {
+  getChatMessages(chatId: string, userId: string, page = 1, limit = 50): Observable<GetChatMessagesResponse> {
     return this.chatService.getChatMessages({ chatId, userId, page, limit });
   }
 
-  getDisputeChat(disputeId: string, userId: string): Observable<any> {
-    return this.chatService.getDisputeChat({ disputeId, userId });
+  getDisputeChat(request: { disputeId: string; userId: string; page: number; limit: number }): Observable<GetChatHistoryResponse> {
+    return this.chatService.getDisputeChat(request);
+  }
+
+  addModeratorComment(request: AddModeratorCommentRequest): Observable<Comment> {
+    return this.chatService.addModeratorComment(request);
+  }
+
+  getDisputeComments(request: { disputeId: string; userId: string; page: number; limit: number }): Observable<GetDisputeCommentsResponse> {
+    return this.chatService.getDisputeComments(request);
   }
 } 

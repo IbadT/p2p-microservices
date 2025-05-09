@@ -49,112 +49,81 @@ export enum RespondAction {
   UNRECOGNIZED = -1,
 }
 
-export enum ResolutionOutcome {
-  /** RESOLVED_FINISHED - Сделка завершается успешно после спора. */
-  RESOLVED_FINISHED = 0,
-  /** RESOLVED_CANCELLED - Сделка отменяется. */
-  RESOLVED_CANCELLED = 1,
-  /** RESOLVED_PARTIAL - Частичное решение (например, частичный возврат). */
-  RESOLVED_PARTIAL = 2,
-  UNRECOGNIZED = -1,
-}
-
 export enum Role {
   CUSTOMER = 0,
   EXCHANGER = 1,
   UNRECOGNIZED = -1,
 }
 
-/** 1. Создание Exchange Offer (инициируется Customer'ом) */
 export interface CreateExchangeOfferRequest {
   /** Идентификатор Customer'а */
   customerId: string;
-  /** Идентификатор Exchange Listing (объявления, созданного Exchanger'ом) */
+  /** Идентификатор Exchange Listing */
   listingId: string;
   /** Сумма сделки */
   amount: number;
-  /** Тип сделки: CRYPTO2FIAT или FIAT2CRYPTO */
+  /** Тип сделки */
   exchangeType: ExchangeType;
-  /** Дополнительные условия (курс, лимиты, время и т.д.) */
+  /** Дополнительные условия */
   conditions: string;
 }
 
 export interface CreateExchangeOfferResponse {
-  /** Уникальный идентификатор созданного предложения */
+  /** ID предложения */
   offerId: string;
-  /** Начальный статус сделки (например, PENDING) */
+  /** Статус */
   status: TransactionStatus;
-  /** Сообщение (например, "Оффер создан") */
+  /** Сообщение */
   message: string;
 }
 
-/** 2. Ответ Exchanger'а на предложение (принять/отклонить) */
 export interface RespondExchangeOfferRequest {
-  /** Идентификатор предложения, на которое отвечает Exchanger */
   offerId: string;
-  /** Идентификатор Exchanger'а, владеющего объявлением */
   exchangerId: string;
-  /** Действие Exchanger'а: ACCEPT или DECLINE */
   action: RespondAction;
 }
 
 export interface RespondExchangeOfferResponse {
   offerId: string;
-  /** Новый статус: APPROVED при принятии или DECLINED при отклонении */
   status: TransactionStatus;
   message: string;
 }
 
-/** 3. Подтверждение перевода фиата Exchanger'ом */
 export interface ConfirmPaymentRequest {
-  /** Идентификатор сделки */
   offerId: string;
-  /** Идентификатор Exchanger'а */
   exchangerId: string;
-  /** Референс внешней транзакции (например, номер платежа) */
   paymentReference: string;
 }
 
 export interface ConfirmPaymentResponse {
   offerId: string;
-  /** Ожидается PAYMENT_CONFIRMED */
   status: TransactionStatus;
   message: string;
 }
 
-/** 4. Подтверждение получения фиата Customer'ом */
 export interface ConfirmReceiptRequest {
-  /** Идентификатор сделки */
   offerId: string;
   customerId: string;
 }
 
 export interface ConfirmReceiptResponse {
   offerId: string;
-  /** Ожидается RECEIPT_CONFIRMED или FINISHED */
   status: TransactionStatus;
   message: string;
 }
 
-/** 5. Открытие спора (может быть инициировано как Customer, так и Exchanger) */
 export interface OpenDisputeRequest {
-  /** Идентификатор сделки */
   offerId: string;
-  /** Кто инициирует спор: CUSTOMER или EXCHANGER */
   openedBy: Role;
-  /** Обоснование открытия спора */
   reason: string;
 }
 
 export interface OpenDisputeResponse {
-  /** Идентификатор спора */
   disputeId: string;
-  /** Новый статус, например, DISPUTE_OPEN */
   status: TransactionStatus;
   message: string;
 }
 
-/** 6. Запрос статуса сделки */
 export interface TransactionStatusRequest {
   offerId: string;
 }
@@ -162,14 +131,11 @@ export interface TransactionStatusRequest {
 export interface TransactionStatusResponse {
   offerId: string;
   status: TransactionStatus;
-  /** Дополнительные сведения о сделке */
   details: string;
 }
 
-/** 7. Установка статуса онлайн для Exchanger'а */
 export interface SetExchangerStatusRequest {
   exchangerId: string;
-  /** true - онлайн, false - офлайн */
   online: boolean;
 }
 
@@ -179,172 +145,120 @@ export interface SetExchangerStatusResponse {
   message: string;
 }
 
-/** 8. Отмена сделки (м.б. инициировано любой стороной) */
 export interface CancelTransactionRequest {
   offerId: string;
-  /** Кто отменяет сделку: CUSTOMER или EXCHANGER */
   cancelledBy: Role;
-  /** Причина отмены */
   reason: string;
 }
 
 export interface CancelTransactionResponse {
   offerId: string;
-  /** Ожидается статус CANCELLED */
   status: TransactionStatus;
   message: string;
 }
 
-/** 9. Разрешение спора (административная операция) */
 export interface ResolveDisputeRequest {
   disputeId: string;
-  /** Идентификатор администратора/модератора */
   adminId: string;
-  /** Результат разрешения спора */
-  resolution: ResolutionOutcome;
-  /** Комментарий, поясняющий решение */
-  comment: string;
+  resolution: string;
+  winnerUserId: string;
+  finalStatus: TransactionStatus;
 }
 
 export interface ResolveDisputeResponse {
   disputeId: string;
-  /** Ожидается DISPUTE_RESOLVED */
   status: TransactionStatus;
   message: string;
+  winnerUserId: string;
+  finalStatus: TransactionStatus;
 }
 
-/** 10. Заморозка Exchanger'а */
 export interface FreezeExchangerRequest {
-  /** Идентификатор Exchanger'а */
   exchangerId: string;
-  /** Причина заморозки */
   reason: string;
 }
 
 export interface FreezeExchangerResponse {
-  /** Идентификатор Exchanger'а */
   exchangerId: string;
-  /** Статус заморозки */
   isFrozen: boolean;
-  /** Сообщение */
   message: string;
 }
 
 export const P2P_PACKAGE_NAME = "p2p";
 
 export interface P2PExchangeServiceClient {
-  /** 1. Создание Exchange Offer (инициируется Customer'ом) */
-
   createExchangeOffer(
     request: CreateExchangeOfferRequest,
     metadata?: Metadata,
   ): Observable<CreateExchangeOfferResponse>;
-
-  /** 2. Exchanger отвечает на предложение (принять или отклонить) */
 
   respondExchangeOffer(
     request: RespondExchangeOfferRequest,
     metadata?: Metadata,
   ): Observable<RespondExchangeOfferResponse>;
 
-  /** 3. Exchanger подтверждает, что перевод фиата выполнен */
-
   confirmPayment(request: ConfirmPaymentRequest, metadata?: Metadata): Observable<ConfirmPaymentResponse>;
-
-  /** 4. Customer подтверждает получение фиата, завершая сделку */
 
   confirmReceipt(request: ConfirmReceiptRequest, metadata?: Metadata): Observable<ConfirmReceiptResponse>;
 
-  /** 5. Открытие спора любой стороной */
-
   openDispute(request: OpenDisputeRequest, metadata?: Metadata): Observable<OpenDisputeResponse>;
-
-  /** 6. Получение текущего статуса сделки */
 
   getTransactionStatus(request: TransactionStatusRequest, metadata?: Metadata): Observable<TransactionStatusResponse>;
 
-  /** 7. Установка статуса онлайн для Exchanger'а */
-
   setExchangerStatus(request: SetExchangerStatusRequest, metadata?: Metadata): Observable<SetExchangerStatusResponse>;
-
-  /** 8. Отмена сделки */
 
   cancelTransaction(request: CancelTransactionRequest, metadata?: Metadata): Observable<CancelTransactionResponse>;
 
-  /** 9. Разрешение спора (административная функция) */
-
   resolveDispute(request: ResolveDisputeRequest, metadata?: Metadata): Observable<ResolveDisputeResponse>;
-
-  /** 10. Заморозка Exchanger'а (административная операция) */
 
   freezeExchanger(request: FreezeExchangerRequest, metadata?: Metadata): Observable<FreezeExchangerResponse>;
 }
 
 export interface P2PExchangeServiceController {
-  /** 1. Создание Exchange Offer (инициируется Customer'ом) */
-
   createExchangeOffer(
     request: CreateExchangeOfferRequest,
     metadata?: Metadata,
   ): Promise<CreateExchangeOfferResponse> | Observable<CreateExchangeOfferResponse> | CreateExchangeOfferResponse;
-
-  /** 2. Exchanger отвечает на предложение (принять или отклонить) */
 
   respondExchangeOffer(
     request: RespondExchangeOfferRequest,
     metadata?: Metadata,
   ): Promise<RespondExchangeOfferResponse> | Observable<RespondExchangeOfferResponse> | RespondExchangeOfferResponse;
 
-  /** 3. Exchanger подтверждает, что перевод фиата выполнен */
-
   confirmPayment(
     request: ConfirmPaymentRequest,
     metadata?: Metadata,
   ): Promise<ConfirmPaymentResponse> | Observable<ConfirmPaymentResponse> | ConfirmPaymentResponse;
-
-  /** 4. Customer подтверждает получение фиата, завершая сделку */
 
   confirmReceipt(
     request: ConfirmReceiptRequest,
     metadata?: Metadata,
   ): Promise<ConfirmReceiptResponse> | Observable<ConfirmReceiptResponse> | ConfirmReceiptResponse;
 
-  /** 5. Открытие спора любой стороной */
-
   openDispute(
     request: OpenDisputeRequest,
     metadata?: Metadata,
   ): Promise<OpenDisputeResponse> | Observable<OpenDisputeResponse> | OpenDisputeResponse;
-
-  /** 6. Получение текущего статуса сделки */
 
   getTransactionStatus(
     request: TransactionStatusRequest,
     metadata?: Metadata,
   ): Promise<TransactionStatusResponse> | Observable<TransactionStatusResponse> | TransactionStatusResponse;
 
-  /** 7. Установка статуса онлайн для Exchanger'а */
-
   setExchangerStatus(
     request: SetExchangerStatusRequest,
     metadata?: Metadata,
   ): Promise<SetExchangerStatusResponse> | Observable<SetExchangerStatusResponse> | SetExchangerStatusResponse;
-
-  /** 8. Отмена сделки */
 
   cancelTransaction(
     request: CancelTransactionRequest,
     metadata?: Metadata,
   ): Promise<CancelTransactionResponse> | Observable<CancelTransactionResponse> | CancelTransactionResponse;
 
-  /** 9. Разрешение спора (административная функция) */
-
   resolveDispute(
     request: ResolveDisputeRequest,
     metadata?: Metadata,
   ): Promise<ResolveDisputeResponse> | Observable<ResolveDisputeResponse> | ResolveDisputeResponse;
-
-  /** 10. Заморозка Exchanger'а (административная операция) */
 
   freezeExchanger(
     request: FreezeExchangerRequest,

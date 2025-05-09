@@ -44,8 +44,10 @@ export interface CreateDisputeDto {
 
 export interface ResolveDisputeDto {
   disputeId: string;
+  moderatorId: string;
   resolution: string;
-  status: TransactionStatus;
+  winnerUserId: string;
+  finalStatus?: 'FINISHED' | 'CANCELLED';
 }
 
 // Review DTOs
