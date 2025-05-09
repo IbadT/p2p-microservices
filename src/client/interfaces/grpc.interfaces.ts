@@ -542,6 +542,7 @@ export interface DisputeWithRelations extends PrismaDispute {
     customer: Pick<PrismaUser, 'id' | 'email'>;
     exchanger: Pick<PrismaUser, 'id' | 'email'>;
   };
+  finalStatus?: 'CANCELLED' | 'FINISHED';
 }
 
 export interface ExchangerStatus {

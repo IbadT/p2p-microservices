@@ -739,4 +739,39 @@ export const ApiAddDisputeComment = () => {
       description: 'Bad request or unauthorized'
     })
   );
+};
+
+export const ApiGetDisputeBalance = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get dispute balance information' }),
+    ApiResponse({
+      status: 200,
+      description: 'Returns balance information for both parties in the dispute',
+      schema: {
+        type: 'object',
+        properties: {
+          cryptoAmount: { type: 'number' },
+          cryptocurrency: { type: 'string' },
+          fiatAmount: { type: 'number' },
+          fiatCurrency: { type: 'string' },
+          customerBalance: {
+            type: 'object',
+            properties: {
+              crypto: { type: 'object', additionalProperties: { type: 'number' } },
+              fiat: { type: 'object', additionalProperties: { type: 'number' } }
+            }
+          },
+          exchangerBalance: {
+            type: 'object',
+            properties: {
+              crypto: { type: 'object', additionalProperties: { type: 'number' } },
+              fiat: { type: 'object', additionalProperties: { type: 'number' } }
+            }
+          }
+        }
+      }
+    }),
+    ApiResponse({ status: 404, description: 'Dispute not found' }),
+    ApiResponse({ status: 403, description: 'Forbidden - Only moderators can access this endpoint' })
+  );
 }; 

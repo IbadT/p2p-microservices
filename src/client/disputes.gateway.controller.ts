@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { CreateDisputeDto, ResolveDisputeDto, AddCommentDto } from './interfaces/client.swagger';
@@ -21,8 +21,11 @@ import { UserRole } from '../shared/decorators/roles.decorator';
 import { User } from '../shared/decorators/user.decorator';
 import { firstValueFrom, Observable } from 'rxjs';
 import { Chat, Comment, GetDisputeCommentsResponse, Dispute, GetDisputesByUserResponse, GetOpenDisputesResponse, GetDisputeChatRequest, GetDisputeCommentsRequest, AddDisputeCommentRequest, GetOpenDisputesRequest, GetDisputesByUserRequest } from '../proto/generated/disputes.pb';
-import { ExchangeType, TransactionStatus, DisputeStatus } from '@prisma/client';
+import { ExchangeType, TransactionStatus, DisputeStatus, User as PrismaUser } from '@prisma/client';
 import { DisputeGrpcClient } from './services/dispute.grpc.client';
+import { CurrentUser } from '../shared/decorators/current-user.decorator';
+import { PrismaService } from 'src/prisma.service';
+
 
 @ApiTags('Disputes')
 @Controller('disputes')
@@ -31,9 +34,12 @@ import { DisputeGrpcClient } from './services/dispute.grpc.client';
 export class DisputesGatewayController {
   private readonly logger = new Logger(DisputesGatewayController.name);
 
-  constructor(private readonly disputeClient: DisputeGrpcClient) {}
+  constructor(
+    private readonly disputeClient: DisputeGrpcClient,
+    private readonly prisma: PrismaService
+  ) {}
 
-  private mapDisputeToDisputeWithRelations(dispute: Dispute): DisputeWithRelations {
+  private mapDisputeToDisputeWithRelations(dispute: any): DisputeWithRelations {
     return {
       id: dispute.id,
       transactionId: dispute.transactionId,
@@ -42,7 +48,8 @@ export class DisputesGatewayController {
       status: dispute.status as DisputeStatus,
       moderatorId: dispute.moderatorId || null,
       resolution: dispute.resolution || null,
-      resolvedAt: null,
+      winnerId: dispute.winnerUserId || null,
+      resolvedAt: dispute.resolvedAt ? new Date(dispute.resolvedAt) : null,
       createdAt: new Date(dispute.createdAt),
       updatedAt: new Date(dispute.updatedAt),
       transaction: {
@@ -140,25 +147,60 @@ export class DisputesGatewayController {
     }
   }
 
-  @Post(':id/resolve')
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  @Post(':disputeId/resolve')
+  @Roles(UserRole.MODERATOR)
   @ApiResolveDispute()
-  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto): Promise<DisputeWithRelations> {
+  async resolveDispute(
+    @Param('disputeId') disputeId: string,
+    @Body() resolveDisputeDto: ResolveDisputeDto,
+    @CurrentUser() moderator: PrismaUser,
+  ): Promise<DisputeWithRelations> {
     try {
-      const resolvedDispute = await this.disputeClient.resolveDispute({
-        disputeId: id,
-        moderatorId: dto.moderatorId,
-        resolution: dto.resolution,
-        winnerUserId: dto.winnerUserId
+      const dispute = await this.disputeClient.resolveDispute({
+        disputeId,
+        resolution: resolveDisputeDto.resolution,
+        moderatorId: moderator.id,
+        winnerUserId: resolveDisputeDto.winnerUserId
       });
 
-      if (!resolvedDispute) {
+      if (!dispute) {
         throw new BadRequestException('Failed to resolve dispute');
       }
 
-      return this.mapDisputeToDisputeWithRelations(resolvedDispute);
+      // Get updated transaction details
+      const transaction = await this.prisma.exchangeTransaction.findUnique({
+        where: { id: dispute.transactionId },
+        include: {
+          customer: true,
+          exchanger: true
+        }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      const isCustomerWinner = resolveDisputeDto.winnerUserId === transaction.customerId;
+
+      return {
+        ...this.mapDisputeToDisputeWithRelations(dispute),
+        transaction: {
+          ...this.mapDisputeToDisputeWithRelations(dispute).transaction,
+          status: transaction.status,
+          finishedAt: transaction.finishedAt,
+          customer: {
+            id: transaction.customer.id,
+            email: transaction.customer.email
+          },
+          exchanger: {
+            id: transaction.exchanger.id,
+            email: transaction.exchanger.email
+          }
+        },
+        finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED'
+      };
     } catch (error) {
-      this.logger.error(`Failed to resolve dispute ${id}: ${error.message}`);
+      this.logger.error(`Failed to resolve dispute: ${error.message}`);
       throw new BadRequestException(error.message || 'Failed to resolve dispute');
     }
   }

@@ -58,22 +58,26 @@ async function createBalances(users) {
     data: [
       {
         userId: customer1.id,
-        cryptoBalance: { BTC: 0.5, ETH: 5, USDT: 1000 },
+        cryptoBalance: { BTC: 1.5, ETH: 5, USDT: 1000 },
+        fiatBalance: { USD: 5000, EUR: 4000 },
         totalHoldAmount: {},
       },
       {
         userId: customer2.id,
-        cryptoBalance: { BTC: 0.2, ETH: 2, USDT: 500 },
+        cryptoBalance: { BTC: 0.5, ETH: 2, USDT: 500 },
+        fiatBalance: { USD: 2000, EUR: 1500 },
         totalHoldAmount: {},
       },
       {
         userId: exchanger1.id,
-        cryptoBalance: { BTC: 10, ETH: 100, USDT: 50000 },
+        cryptoBalance: { BTC: 5, ETH: 20, USDT: 5000 },
+        fiatBalance: { USD: 10000, EUR: 8000 },
         totalHoldAmount: {},
       },
       {
         userId: exchanger2.id,
-        cryptoBalance: { BTC: 5, ETH: 50, USDT: 25000 },
+        cryptoBalance: { BTC: 3, ETH: 15, USDT: 3000 },
+        fiatBalance: { USD: 8000, EUR: 6000 },
         totalHoldAmount: {},
       },
     ],

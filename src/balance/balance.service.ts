@@ -24,6 +24,7 @@ export class BalanceService {
         data: {
           userId,
           cryptoBalance: {} as CryptoBalance,
+          fiatBalance: {},
           totalHoldAmount: {} as HoldAmount,
         },
       });
@@ -331,5 +332,16 @@ export class BalanceService {
     });
 
     return { fromUserId, toUserId, amount, cryptocurrency };
+  }
+
+  async createUserBalance(userId: string) {
+    return this.prisma.userBalance.create({
+      data: {
+        userId,
+        cryptoBalance: {},
+        fiatBalance: {},
+        totalHoldAmount: {},
+      },
+    });
   }
 }

@@ -14,6 +14,8 @@ service DisputeService {
   rpc GetDisputeChat (GetDisputeChatRequest) returns (Chat);
   rpc AddDisputeComment (AddDisputeCommentRequest) returns (Comment);
   rpc GetDisputeComments (GetDisputeCommentsRequest) returns (GetDisputeCommentsResponse);
+  rpc GetDisputeBalance (GetDisputeBalanceRequest) returns (GetDisputeBalanceResponse);
+  rpc AddModeratorComment (AddModeratorCommentRequest) returns (AddModeratorCommentResponse);
 }
 
 // ------------------------------
@@ -42,9 +44,9 @@ message CreateDisputeRequest {
 
 message ResolveDisputeRequest {
   string disputeId = 1;
-  string moderatorId = 2;
-  string resolution = 3;
-  string winnerUserId = 4;
+  string resolution = 2;
+  string moderatorId = 3;
+  string winnerId = 4;
 }
 
 message GetDisputesByUserRequest {
@@ -88,10 +90,15 @@ message AddDisputeCommentRequest {
 message GetDisputeCommentsRequest {
   string disputeId = 1;
   string userId = 2;
+  int32 page = 3;
+  int32 limit = 4;
 }
 
 message GetDisputeCommentsResponse {
   repeated Comment comments = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
 }
 
 message Comment {
@@ -102,4 +109,45 @@ message Comment {
   bool isModerator = 5;
   string createdAt = 6;
   User user = 7;
+}
+
+message ResolveDisputeResponse {
+  string dispute_id = 1;
+  string status = 2;
+  string resolution = 3;
+  string winner_user_id = 4;
+  string transaction_id = 5;
+  string final_status = 6;
+}
+
+message GetDisputeBalanceRequest {
+  string dispute_id = 1;
+}
+
+message GetDisputeBalanceResponse {
+  double crypto_amount = 1;
+  string cryptocurrency = 2;
+  double fiat_amount = 3;
+  string fiat_currency = 4;
+  BalanceInfo customer_balance = 5;
+  BalanceInfo exchanger_balance = 6;
+}
+
+message BalanceInfo {
+  map<string, double> crypto = 1;
+  map<string, double> fiat = 2;
+}
+
+message AddModeratorCommentRequest {
+  string dispute_id = 1;
+  string moderator_id = 2;
+  string text = 3;
+}
+
+message AddModeratorCommentResponse {
+  string comment_id = 1;
+  string dispute_id = 2;
+  string moderator_id = 3;
+  string text = 4;
+  string created_at = 5;
 } 

@@ -11,6 +11,7 @@ import { ChatGrpcClient } from '../client/services/chat.grpc.client';
 import { Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { Comment } from '../proto/generated/chat.pb';
+import { BalanceService } from '../balance/balance.service';
 
 @Injectable()
 export class DisputesService {
@@ -22,6 +23,7 @@ export class DisputesService {
     private notificationsGateway: NotificationsGateway,
     private auditService: AuditService,
     private chatGrpcClient: ChatGrpcClient,
+    private balanceService: BalanceService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -170,175 +172,200 @@ export class DisputesService {
 
   async resolveDispute(
     disputeId: string,
-    moderatorId: string,
     resolution: string,
-    winnerUserId: string
+    moderatorId: string,
+    winnerId: string,
   ) {
-    // Start a transaction
-    return this.prisma.$transaction(async (prisma) => {
-      const dispute = await prisma.dispute.findUnique({
-        where: { id: disputeId },
-        include: { transaction: true },
-      });
-
-      if (!dispute) {
-        throw new Error('Dispute not found');
-      }
-
-      if (dispute.status !== DisputeStatus.OPEN) {
-        throw new Error('Dispute is not open');
-      }
-
-      const resolvedDispute = await prisma.dispute.update({
-        where: { id: disputeId },
-        data: {
-          status: DisputeStatus.RESOLVED,
-          resolution,
-          moderatorId,
-          resolvedAt: new Date(),
+    const dispute = await this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: {
+          include: {
+            customer: {
+              include: { balance: true }
+            },
+            exchanger: {
+              include: { balance: true }
+            }
+          }
         },
-      });
+      },
+    });
 
-      const transaction = dispute.transaction;
-      const isCustomerWinner = winnerUserId === transaction.customerId;
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
 
+    if (dispute.status === DisputeStatus.RESOLVED) {
+      throw new ForbiddenException('Dispute is already resolved');
+    }
+
+    // Проверяем, что транзакция существует и в статусе спора
+    if (!dispute.transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    if (dispute.transaction.status !== TransactionStatus.DISPUTE_OPEN) {
+      throw new ForbiddenException('Transaction is not in dispute status');
+    }
+
+    // Проверяем, что победитель является участником транзакции
+    const isCustomerWinner = winnerId === dispute.transaction.customerId;
+    const isExchangerWinner = winnerId === dispute.transaction.exchangerId;
+
+    if (!isCustomerWinner && !isExchangerWinner) {
+      throw new ForbiddenException('Winner must be either customer or exchanger');
+    }
+
+    // Start a transaction to ensure all operations are atomic
+    return await this.prisma.$transaction(async (prisma) => {
       try {
-        // Handle funds based on resolution
-        if (isCustomerWinner) {
-          // If customer wins, they get their crypto back
-          await prisma.userBalance.update({
-            where: { userId: transaction.customerId },
-            data: {
-              cryptoBalance: {
-                update: {
-                  [transaction.cryptocurrency]: {
-                    increment: transaction.cryptoAmount
-                  }
-                }
-              },
-              totalHoldAmount: {
-                update: {
-                  [transaction.cryptocurrency]: {
-                    decrement: transaction.cryptoAmount
-                  }
-                }
-              }
-            }
-          });
-
-          // Log the balance update
-          await this.auditService.createAuditLog({
-            userId: transaction.customerId,
-            action: 'BALANCE_UPDATE',
-            entityType: 'UserBalance',
-            entityId: transaction.customerId,
-            metadata: {
-              type: 'DISPUTE_RESOLUTION',
-              amount: transaction.cryptoAmount,
-              cryptocurrency: transaction.cryptocurrency,
-              operation: 'INCREMENT'
-            }
-          });
-        } else {
-          // If exchanger wins, they get the crypto
-          await prisma.userBalance.update({
-            where: { userId: transaction.exchangerId },
-            data: {
-              cryptoBalance: {
-                update: {
-                  [transaction.cryptocurrency]: {
-                    increment: transaction.cryptoAmount
-                  }
-                }
-              }
-            }
-          });
-
-          // Log the balance update
-          await this.auditService.createAuditLog({
-            userId: transaction.exchangerId,
-            action: 'BALANCE_UPDATE',
-            entityType: 'UserBalance',
-            entityId: transaction.exchangerId,
-            metadata: {
-              type: 'DISPUTE_RESOLUTION',
-              amount: transaction.cryptoAmount,
-              cryptocurrency: transaction.cryptocurrency,
-              operation: 'INCREMENT'
-            }
-          });
-        }
-
-        // Update transaction status and completion
-        const finalStatus = isCustomerWinner ? TransactionStatus.FINISHED : TransactionStatus.CANCELLED;
-        await prisma.exchangeTransaction.update({
-          where: { id: transaction.id },
+        // Update dispute status
+        const updatedDispute = await prisma.dispute.update({
+          where: { id: disputeId },
           data: {
-            status: finalStatus,
-            finishedAt: new Date(),
-            isActive: false,
+            status: DisputeStatus.RESOLVED,
+            resolution,
+            moderatorId,
+            winnerId,
+            resolvedAt: new Date(),
           },
         });
 
-        // Emit Kafka event
-        await this.kafka.sendEvent({
-          type: NotificationType.DISPUTE_RESOLVED,
-          payload: { 
-            disputeId: resolvedDispute.id,
-            transactionId: transaction.id,
-            winnerUserId,
-            finalStatus
+        const transaction = dispute.transaction;
+
+        // Handle transaction completion and balance updates based on winner
+        if (isCustomerWinner) {
+          // If customer wins, return crypto to customer and mark transaction as cancelled
+          // First release the hold
+          await this.balanceService.releaseHold(transaction.id);
+          
+          // Then return crypto to customer if it was held by exchanger
+          if (transaction.status === TransactionStatus.DISPUTE_OPEN) {
+            await this.balanceService.transfer(
+              transaction.exchangerId,
+              transaction.customerId,
+              transaction.cryptocurrency,
+              transaction.cryptoAmount,
+              transaction.id
+            );
           }
-        });
 
-        // Notify winner
-        this.notificationsGateway.notifyUser(winnerUserId, NotificationType.DISPUTE_RESOLVED, { 
-          disputeId: resolvedDispute.id,
+          // Update transaction status
+          await prisma.exchangeTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              status: TransactionStatus.CANCELLED,
+              finishedAt: new Date(),
+            },
+          });
+
+          // Create audit log for cancellation
+          await this.auditService.createAuditLog({
+            userId: moderatorId,
+            action: 'DISPUTE_RESOLVED_CANCELLED',
+            entityType: 'Dispute',
+            entityId: disputeId,
+            metadata: {
+              transactionId: transaction.id,
+              winnerId,
+              resolution,
+              balanceReturned: true,
+              cryptoAmount: transaction.cryptoAmount,
+              cryptocurrency: transaction.cryptocurrency
+            },
+          });
+
+          // Emit Kafka event for cancellation
+          await this.kafka.sendEvent({
+            type: NotificationType.DISPUTE_RESOLVED,
+            payload: {
+              disputeId,
+              transactionId: transaction.id,
+              winnerId,
+              finalStatus: 'CANCELLED',
+              resolution,
+              balanceReturned: true,
+              cryptoAmount: transaction.cryptoAmount,
+              cryptocurrency: transaction.cryptocurrency
+            },
+          });
+        } else {
+          // If exchanger wins, complete transaction and transfer crypto to exchanger
+          await prisma.exchangeTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              status: TransactionStatus.FINISHED,
+              finishedAt: new Date(),
+            },
+          });
+
+          // Transfer crypto from customer to exchanger
+          await this.balanceService.transfer(
+            transaction.customerId,
+            transaction.exchangerId,
+            transaction.cryptocurrency,
+            transaction.cryptoAmount,
+            transaction.id
+          );
+
+          // Create audit log for completion
+          await this.auditService.createAuditLog({
+            userId: moderatorId,
+            action: 'DISPUTE_RESOLVED_COMPLETED',
+            entityType: 'Dispute',
+            entityId: disputeId,
+            metadata: {
+              transactionId: transaction.id,
+              winnerId,
+              resolution,
+              balanceTransferred: true,
+              cryptoAmount: transaction.cryptoAmount,
+              cryptocurrency: transaction.cryptocurrency
+            },
+          });
+
+          // Emit Kafka event for completion
+          await this.kafka.sendEvent({
+            type: NotificationType.DISPUTE_RESOLVED,
+            payload: {
+              disputeId,
+              transactionId: transaction.id,
+              winnerId,
+              finalStatus: 'FINISHED',
+              resolution,
+              balanceTransferred: true,
+              cryptoAmount: transaction.cryptoAmount,
+              cryptocurrency: transaction.cryptocurrency
+            },
+          });
+        }
+
+        // Notify both participants about the resolution
+        this.notificationsGateway.notifyUser(transaction.customerId, NotificationType.DISPUTE_RESOLVED, {
+          disputeId,
           transactionId: transaction.id,
-          resolution
+          winnerId,
+          finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
+          resolution,
+          cryptoAmount: transaction.cryptoAmount,
+          cryptocurrency: transaction.cryptocurrency
         });
 
-        // Notify loser
-        const loserUserId = isCustomerWinner ? transaction.exchangerId : transaction.customerId;
-        this.notificationsGateway.notifyUser(loserUserId, NotificationType.DISPUTE_RESOLVED, {
-          disputeId: resolvedDispute.id,
+        this.notificationsGateway.notifyUser(transaction.exchangerId, NotificationType.DISPUTE_RESOLVED, {
+          disputeId,
           transactionId: transaction.id,
-          resolution
+          winnerId,
+          finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
+          resolution,
+          cryptoAmount: transaction.cryptoAmount,
+          cryptocurrency: transaction.cryptocurrency
         });
 
-        await this.auditService.createAuditLog({
-          userId: moderatorId,
-          action: 'RESOLVE_DISPUTE',
-          entityType: 'Dispute',
-          entityId: disputeId,
-          metadata: { 
-            resolution, 
-            winnerUserId,
-            finalStatus,
-            transactionId: transaction.id
-          }
-        });
-
-        return resolvedDispute;
+        return updatedDispute;
       } catch (error) {
-        // Log the error
-        this.logger.error(`Failed to resolve dispute ${disputeId}: ${error.message}`);
-        
-        // Create audit log for the failure
-        await this.auditService.createAuditLog({
-          userId: moderatorId,
-          action: 'RESOLVE_DISPUTE_FAILED',
-          entityType: 'Dispute',
-          entityId: disputeId,
-          metadata: { 
-            error: error.message,
-            resolution, 
-            winnerUserId,
-            transactionId: transaction.id
-          }
-        });
-
-        throw new Error(`Failed to resolve dispute: ${error.message}`);
+        this.logger.error(`Failed to resolve dispute: ${error.message}`);
+        throw new ForbiddenException(`Failed to resolve dispute: ${error.message}`);
       }
     });
   }
@@ -509,6 +536,21 @@ export class DisputesService {
     await this.kafka.sendEvent({
       type: NotificationType.MODERATOR_COMMENT_ADDED,
       payload: notificationData
+    });
+  }
+
+  async getDisputeById(disputeId: string) {
+    return this.prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: true,
+        moderator: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
     });
   }
 }

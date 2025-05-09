@@ -11,6 +11,7 @@ import { ClientModule } from '../client/client.module';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 import { CacheModule } from '@nestjs/cache-manager';
+import { BalanceModule } from '../balance/balance.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     NotificationsModule,
     AuditModule,
     AuthModule,
+    BalanceModule,
     forwardRef(() => ClientModule),
   ],
   controllers: [DisputesController],

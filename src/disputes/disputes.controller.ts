@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Query, NotFoundException } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
@@ -11,24 +11,32 @@ import {
   ApiResolveDispute,
   ApiAddComment,
   ApiGetMyDisputes,
-  ApiGetOpenDisputes
+  ApiGetOpenDisputes,
+  ApiGetDisputeBalance
 } from '../client/swagger/client.swagger';
 import { DisputesService } from './disputes.service';
 import { CreateDisputeRequest, ResolveDisputeRequest, GetDisputesByUserRequest, GetOpenDisputesRequest, GetDisputesByUserResponse, GetOpenDisputesResponse, Dispute } from '../proto/generated/disputes.pb';
-import { Roles } from 'src/shared/decorators/roles.decorator';
-import { RolesGuard } from 'src/shared/guards/roles.guard';
-import { UserRole } from 'src/shared/decorators/roles.decorator';
-import { User } from 'src/shared/decorators/user.decorator';
+import { Roles } from '../shared/decorators/roles.decorator';
+import { RolesGuard } from '../shared/guards/roles.guard';
+import { UserRole } from '../shared/decorators/roles.decorator';
+import { User as PrismaUser } from '@prisma/client';
 import { Chat, Comment } from '../proto/generated/chat.pb';
 import { Comment as PrismaComment } from '@prisma/client';
 import { GetChatHistoryResponse } from '../proto/generated/chat.pb';
+import { CurrentUser } from '../shared/decorators/current-user.decorator';
+import { User } from '../shared/decorators/user.decorator';
+import { PrismaService } from 'src/prisma.service';
+
 
 @ApiTags('Disputes')
 @Controller('disputes')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiSecurity('JWT-auth')
 export class DisputesController {
-  constructor(private readonly disputesService: DisputesService) {}
+  constructor(
+    private readonly disputesService: DisputesService,
+    private readonly prisma: PrismaService
+  ) {}
 
   // REST endpoints
   @Post()
@@ -109,17 +117,112 @@ export class DisputesController {
     };
   }
 
-  @Post(':id/resolve')
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  @Post(':disputeId/resolve')
+  @GrpcMethod('DisputeService', 'ResolveDispute')
+  @Roles(UserRole.MODERATOR)
   @ApiResolveDispute()
-  async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto): Promise<void> {
-    await this.disputesService.resolveDispute(id, dto.moderatorId, dto.resolution, dto.winnerUserId);
+  async resolveDispute(
+    @Param('disputeId') disputeId: string,
+    @Body() resolveDisputeDto: ResolveDisputeDto,
+    @CurrentUser() moderator: PrismaUser,
+  ) {
+    const dispute = await this.disputesService.resolveDispute(
+      disputeId,
+      resolveDisputeDto.resolution,
+      moderator.id,
+      resolveDisputeDto.winnerUserId
+    );
+
+    // Get updated transaction details
+    const transaction = await this.prisma.exchangeTransaction.findUnique({
+      where: { id: dispute.transactionId },
+      include: {
+        customer: true,
+        exchanger: true
+      }
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    const isCustomerWinner = resolveDisputeDto.winnerUserId === transaction.customerId;
+
+    return {
+      id: dispute.id,
+      transactionId: dispute.transactionId,
+      initiatorId: dispute.initiatorId,
+      reason: dispute.reason,
+      status: dispute.status,
+      moderatorId: dispute.moderatorId || '',
+      resolution: dispute.resolution || '',
+      winnerUserId: dispute.winnerId || '',
+      createdAt: dispute.createdAt.toISOString(),
+      updatedAt: dispute.updatedAt.toISOString(),
+      transaction: {
+        id: transaction.id,
+        status: transaction.status,
+        finishedAt: transaction.finishedAt,
+        customer: {
+          id: transaction.customer.id,
+          email: transaction.customer.email
+        },
+        exchanger: {
+          id: transaction.exchanger.id,
+          email: transaction.exchanger.email
+        }
+      },
+      finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED'
+    };
   }
 
   @Post(':id/comments')
   @ApiAddComment()
   async addComment(@Param('id') id: string, @Body() dto: AddCommentDto): Promise<void> {
     await this.disputesService.addModeratorComment(id, dto.userId, dto.text);
+  }
+
+  @Get(':disputeId/balance')
+  @Roles(UserRole.MODERATOR)
+  @ApiGetDisputeBalance()
+  async getDisputeBalance(
+    @Param('disputeId') disputeId: string,
+  ) {
+    const dispute = await this.disputesService.getDisputeById(disputeId);
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    const transaction = await this.prisma.exchangeTransaction.findUnique({
+      where: { id: dispute.transactionId },
+      include: {
+        customer: {
+          include: { balance: true }
+        },
+        exchanger: {
+          include: { balance: true }
+        }
+      }
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      cryptoAmount: transaction.cryptoAmount,
+      cryptocurrency: transaction.cryptocurrency,
+      fiatAmount: transaction.fiatAmount,
+      fiatCurrency: transaction.fiatCurrency,
+      customerBalance: {
+        crypto: transaction.customer.balance?.cryptoBalance || {},
+        fiat: transaction.customer.balance?.fiatBalance || {}
+      },
+      exchangerBalance: {
+        crypto: transaction.exchanger.balance?.cryptoBalance || {},
+        fiat: transaction.exchanger.balance?.fiatBalance || {}
+      }
+    };
   }
 
   // gRPC endpoints
@@ -131,18 +234,6 @@ export class DisputesController {
       initiatorId: data.initiatorId,
       reason: data.reason
     });
-  }
-
-  @GrpcMethod('DisputeService', 'ResolveDispute')
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  async resolveDispute(data: ResolveDisputeRequest): Promise<Dispute> {
-    await this.resolve(data.disputeId, {
-      disputeId: data.disputeId,
-      moderatorId: data.moderatorId,
-      resolution: data.resolution,
-      winnerUserId: data.winnerUserId
-    });
-    return this.findOne(data.disputeId);
   }
 
   @GrpcMethod('DisputeService', 'GetDisputesByUser')
