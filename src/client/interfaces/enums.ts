@@ -7,7 +7,8 @@ export enum UserRole {
   USER = 'USER',
   EXCHANGER = 'EXCHANGER',
   ADMIN = 'ADMIN',
-  MODERATOR = 'MODERATOR'
+  MODERATOR = 'MODERATOR',
+  CUSTOMER = "CUSTOMER"
 }
 
 export enum TransactionStatus {
@@ -71,7 +72,12 @@ export enum NotificationType {
   HEALTH_CHECK = 'system.health.check',
   
   // Security related
-  SECURITY = 'SECURITY'
+  SECURITY = 'SECURITY',
+  
+  // Chat related
+  CHAT_CREATED = 'CHAT_CREATED',
+  MODERATOR_ADDED_TO_CHAT = 'MODERATOR_ADDED_TO_CHAT',
+  NEW_MESSAGE = 'NEW_MESSAGE'
 }
 
 export enum AuditAction {

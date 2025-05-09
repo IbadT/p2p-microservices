@@ -634,4 +634,63 @@ export const ApiUnfreezeExchanger = () => {
       type: ExchangerStatus
     })
   );
-}; 
+};
+
+export function ApiGetMyDisputes() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get disputes for the current user' }),
+    ApiResponse({ 
+      status: 200, 
+      description: 'Returns list of disputes for the current user',
+      schema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            transactionId: { type: 'string' },
+            initiatorId: { type: 'string' },
+            reason: { type: 'string' },
+            status: { type: 'string' },
+            moderatorId: { type: 'string' },
+            resolution: { type: 'string' },
+            winnerUserId: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }),
+    ApiResponse({ status: 401, description: 'Unauthorized' })
+  );
+}
+
+export function ApiGetOpenDisputes() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get all open disputes' }),
+    ApiResponse({ 
+      status: 200, 
+      description: 'Returns list of open disputes',
+      schema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            transactionId: { type: 'string' },
+            initiatorId: { type: 'string' },
+            reason: { type: 'string' },
+            status: { type: 'string' },
+            moderatorId: { type: 'string' },
+            resolution: { type: 'string' },
+            winnerUserId: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }),
+    ApiResponse({ status: 401, description: 'Unauthorized' }),
+    ApiResponse({ status: 403, description: 'Forbidden - User is not a moderator or admin' })
+  );
+} 

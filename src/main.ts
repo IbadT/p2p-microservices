@@ -122,6 +122,13 @@ async function bootstrap() {
       • GET /health - Проверка состояния сервиса
       • GET /health/metrics - Получение метрик
       • GET /health/dependencies - Проверка зависимостей
+
+      Chats:
+      • POST /chats - Создание нового чата
+      • GET /chats - Получение списка чатов
+      • GET /chats/{id} - Получение информации о чате
+      • PUT /chats/{id} - Обновление чата
+      • DELETE /chats/{id} - Удаление чата
     `)
     .setVersion('1.0')
     .addBearerAuth(
@@ -147,6 +154,7 @@ async function bootstrap() {
     .addTag('Scheduler', 'Планировщик - Управление запланированными задачами. Автоматические операции, уведомления и системные процессы.')
     .addTag('Notifications', 'Уведомления - Управление уведомлениями. Настройка, отправка и получение системных уведомлений и оповещений.')
     .addTag('Health', 'Мониторинг - Система мониторинга состояния сервиса. Проверка работоспособности компонентов, метрики производительности и статус зависимостей.')
+    .addTag('Chats', 'Чаты - Управление чатами и сообщениями.')
     .build();
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
@@ -222,6 +230,10 @@ async function bootstrap() {
       .swagger-ui .opblock-tag[data-tag="Health"] {
         background-color: #e8f5e9;
         border: 1px solid #2e7d32;
+      }
+      .swagger-ui .opblock-tag[data-tag="Chats"] {
+        background-color: #e8f5e9;
+        border: 1px solid #4caf50;
       }
     `
   });

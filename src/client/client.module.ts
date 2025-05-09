@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -12,6 +12,7 @@ import { ListingsGatewayController } from './listings.gateway.controller';
 import { OffersGatewayController } from './offers.gateway.controller';
 import { BalanceGatewayController } from './balance.gateway.controller';
 import { AuditGatewayController } from './audit.gateway.controller';
+import { ChatsGatewayController } from './chats.gateway.controller';
 import { UserGrpcClient } from './services/user.grpc.client';
 import { BalanceGrpcClient } from './services/balance.grpc.client';
 import { DisputeGrpcClient } from './services/dispute.grpc.client';
@@ -20,6 +21,7 @@ import { ExchangeClientService } from './services/exchange.client';
 import { P2PGrpcClient } from './services/p2p.grpc.client';
 import { AuditGrpcClient } from './services/audit.grpc.client';
 import { SchedulerGrpcClient } from './services/scheduler.grpc.client';
+import { ChatGrpcClient } from './services/chat.grpc.client';
 import {
   USER_SERVICE,
   BALANCE_SERVICE,
@@ -69,7 +71,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
     UsersModule,
     ReviewsModule,
-    DisputesModule,
+    forwardRef(() => DisputesModule),
     ListingsModule,
     OffersModule,
     AuditModule,
@@ -278,8 +280,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
           transport: Transport.GRPC,
           options: {
             package: 'p2p',
-            protoPath: 'src/proto/p2p.proto',
-            url: configService.get('P2P_SERVICE_URL', 'localhost:5000'),
+            protoPath: join(process.cwd(), 'dist/proto/p2p.proto'),
+            url: configService.get('GRPC_URL'),
           },
         }),
         inject: [ConfigService],
@@ -440,6 +442,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'CHAT_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'chat',
+            protoPath: join(process.cwd(), 'dist/proto/chat.proto'),
+            url: configService.get('CHAT_GRPC_URL'),
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
   ],
   controllers: [
@@ -450,7 +465,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     ListingsGatewayController,
     OffersGatewayController,
     BalanceGatewayController,
-    AuditGatewayController
+    AuditGatewayController,
+    ChatsGatewayController,
   ],
   providers: [
     RateLimitGuard,
@@ -467,6 +483,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     ListingsGrpcClient,
     OffersGrpcClient,
     AuthGrpcClient,
+    ChatGrpcClient,
     JwtStrategy,
   ],
   exports: [
@@ -483,6 +500,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     ListingsGrpcClient,
     OffersGrpcClient,
     AuthGrpcClient,
+    ChatGrpcClient,
   ],
 })
 export class ClientModule {} 

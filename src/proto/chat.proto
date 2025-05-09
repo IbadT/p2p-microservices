@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package chat;
+
+service ChatService {
+  rpc CreateDisputeChat (CreateDisputeChatRequest) returns (Chat);
+  rpc AddModeratorToChat (AddModeratorToChatRequest) returns (Chat);
+  rpc SendMessage (SendMessageRequest) returns (Message);
+  rpc GetChatMessages (GetChatMessagesRequest) returns (GetChatMessagesResponse);
+  rpc GetDisputeChat (GetDisputeChatRequest) returns (Chat);
+}
+
+message CreateDisputeChatRequest {
+  string disputeId = 1;
+  string userId = 2;
+}
+
+message AddModeratorToChatRequest {
+  string chatId = 1;
+  string moderatorId = 2;
+}
+
+message SendMessageRequest {
+  string chatId = 1;
+  string senderId = 2;
+  string content = 3;
+}
+
+message GetChatMessagesRequest {
+  string chatId = 1;
+  string userId = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message GetChatMessagesResponse {
+  repeated Message messages = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message GetDisputeChatRequest {
+  string disputeId = 1;
+  string userId = 2;
+}
+
+message Chat {
+  string id = 1;
+  string type = 2;
+  string disputeId = 3;
+  repeated ChatParticipant participants = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message ChatParticipant {
+  string id = 1;
+  string userId = 2;
+  string role = 3;
+  User user = 4;
+  string joinedAt = 5;
+}
+
+message Message {
+  string id = 1;
+  string content = 2;
+  string senderId = 3;
+  User sender = 4;
+  string chatId = 5;
+  string createdAt = 6;
+  string updatedAt = 7;
+}
+
+message User {
+  string id = 1;
+  string name = 2;
+  string role = 3;
+} 

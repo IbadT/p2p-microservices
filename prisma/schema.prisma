@@ -48,6 +48,8 @@ model User {
   holds             BalanceHold[]
   auditLogs         AuditLog[]
   exchangerStatus   ExchangerStatus?
+  messages          Message[]
+  chatParticipants  ChatParticipant[]
 
   @@index([isExchangerActive])
   @@index([isFrozen])
@@ -189,6 +191,7 @@ model Dispute {
   initiator       User             @relation("DisputeInitiator", fields: [initiatorId], references: [id])
   moderatorId     String?
   moderator       User?            @relation("DisputeModerator", fields: [moderatorId], references: [id])
+  chat            Chat?
 
   @@index([status])
   @@index([initiatorId])
@@ -316,4 +319,64 @@ model ExchangerStatus {
   exchanger     User      @relation(fields: [exchangerId], references: [id])
 
   @@map("exchanger_status")
+}
+
+model Chat {
+  id              String           @id @default(uuid())
+  type            ChatType         @default(DISPUTE)
+  disputeId       String?          @unique
+  dispute         Dispute?         @relation(fields: [disputeId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relationships
+  messages        Message[]
+  participants    ChatParticipant[]
+
+  @@index([type])
+  @@index([disputeId])
+  @@map("chats")
+}
+
+model Message {
+  id              String           @id @default(uuid())
+  content         String
+  senderId        String
+  sender          User             @relation(fields: [senderId], references: [id])
+  chatId          String
+  chat            Chat             @relation(fields: [chatId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([senderId])
+  @@index([chatId])
+  @@map("messages")
+}
+
+model ChatParticipant {
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  chatId          String
+  chat            Chat             @relation(fields: [chatId], references: [id])
+  role            ChatParticipantRole
+  joinedAt        DateTime         @default(now())
+
+  @@unique([userId, chatId])
+  @@index([userId])
+  @@index([chatId])
+  @@map("chat_participants")
+}
+
+enum ChatType {
+  DISPUTE
+  SUPPORT
+  GENERAL
+}
+
+enum ChatParticipantRole {
+  CUSTOMER
+  EXCHANGER
+  MODERATOR
+  ADMIN
 }

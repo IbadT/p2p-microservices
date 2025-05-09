@@ -7,6 +7,7 @@ import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 import { NotificationType } from '../client/interfaces/enums';
 import { DatabaseUtils } from '../shared/utils/database.utils';
+import { ChatGrpcClient } from '../client/services/chat.grpc.client';
 
 @Injectable()
 export class DisputesService {
@@ -15,6 +16,7 @@ export class DisputesService {
     private kafka: KafkaService,
     private notificationsGateway: NotificationsGateway,
     private auditService: AuditService,
+    private chatGrpcClient: ChatGrpcClient,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -73,6 +75,9 @@ export class DisputesService {
         status: DisputeStatus.OPEN
       }
     });
+
+    // Create chat for the dispute
+    await this.chatGrpcClient.createDisputeChat(dispute.id, initiatorId);
 
     // Update transaction status
     await this.prisma.exchangeTransaction.update({

@@ -8,14 +8,20 @@ import {
   ApiGetAllDisputes,
   ApiGetDisputeById,
   ApiResolveDispute,
-  ApiAddComment
+  ApiAddComment,
+  ApiGetMyDisputes,
+  ApiGetOpenDisputes
 } from './swagger/client.swagger';
 import { ClientGrpc } from '@nestjs/microservices';
 import { DISPUTE_SERVICE } from './constants';
+import { Roles } from 'src/shared/decorators/roles.decorator';
+import { RolesGuard } from 'src/shared/guards/roles.guard';
+import { UserRole } from 'src/shared/decorators/roles.decorator';
+import { User } from 'src/shared/decorators/user.decorator';
 
 @ApiTags('Disputes')
 @Controller('disputes')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiSecurity('JWT-auth')
 export class DisputesGatewayController {
   private disputeService: any;
@@ -27,6 +33,7 @@ export class DisputesGatewayController {
   }
 
   @Post()
+  @Roles(UserRole.CUSTOMER, UserRole.EXCHANGER)
   @ApiCreateDispute()
   async create(@Body() dto: CreateDisputeDto): Promise<DisputeWithRelations> {
     const dispute = await this.disputeService.createDispute({
@@ -38,8 +45,24 @@ export class DisputesGatewayController {
   }
 
   @Get()
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
   @ApiGetAllDisputes()
   async findAll(): Promise<DisputeWithRelations[]> {
+    const response = await this.disputeService.getOpenDisputes({}).toPromise();
+    return response.disputes;
+  }
+
+  @Get('my')
+  @ApiGetMyDisputes()
+  async getMyDisputes(@User('id') userId: string): Promise<DisputeWithRelations[]> {
+    const response = await this.disputeService.getDisputesByUser({ userId }).toPromise();
+    return response.disputes;
+  }
+
+  @Get('open')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  @ApiGetOpenDisputes()
+  async getOpenDisputes(): Promise<DisputeWithRelations[]> {
     const response = await this.disputeService.getOpenDisputes({}).toPromise();
     return response.disputes;
   }
@@ -56,6 +79,7 @@ export class DisputesGatewayController {
   }
 
   @Post(':id/resolve')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
   @ApiResolveDispute()
   async resolve(@Param('id') id: string, @Body() dto: ResolveDisputeDto): Promise<void> {
     await this.disputeService.resolveDispute({

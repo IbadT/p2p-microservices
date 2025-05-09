@@ -16,7 +16,7 @@ import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 // import { ExchangeModule } from './exchange-service/src/exchange.module';
-import { DisputeModule } from './dispute-service/src/dispute.module';
+// import { DisputeModule } from './dispute-service/src/dispute.module';
 import { PrismaClient } from '@prisma/client';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
@@ -55,7 +55,7 @@ import { KafkaService } from './kafka/kafka.service';
     NotificationsModule,
     SchedulerModule,
     // ExchangeModule,
-    DisputeModule,
+    // DisputeModule,
     ClientModule,
   ],
   controllers: [AppController],
