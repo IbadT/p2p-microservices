@@ -2,7 +2,7 @@ import { Controller, Post, Patch, Get, Param, Body, Query, Inject, OnModuleInit,
 import { ClientGrpc } from '@nestjs/microservices';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../shared/guards/roles.guard';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { P2PGrpcClient } from './services/p2p.grpc.client';
 import { CreateExchangeOfferDto, RespondExchangeOfferDto } from './interfaces/client.swagger';
 import { SecurityManager } from '../shared/utils/security.utils';
@@ -29,11 +29,12 @@ import {
   ApiRespondExchangeOffer
 } from './swagger/client.swagger';
 import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
+import { ErrorMessages } from '../shared/constants/error-messages';
 
 @ApiTags('Offers')
 @Controller('offers')
 @UseGuards(JwtAuthGuard, RateLimitGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class OffersGatewayController extends BaseGrpcClient implements OnModuleInit {
   private offerService: OffersService;
   
@@ -71,7 +72,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   async getOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string): Promise<Offer> {
     const ip = req.ip || req.connection.remoteAddress;
     if (!ip) {
-      throw new BadRequestException('IP address is required');
+      throw new BadRequestException(ErrorMessages.IP_REQUIRED);
     }
 
     await SecurityManager.checkRateLimit(ip, 'getOffer');
@@ -79,7 +80,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
       return this.p2pClient.getOffer(id);
     });
     if (!result) {
-      throw new BadRequestException('Offer not found');
+      throw new BadRequestException(ErrorMessages.OFFER_NOT_FOUND);
     }
     return this.convertExchangeOfferToOffer(result);
   }
@@ -89,7 +90,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   async createExchangeOffer(@Body() dto: CreateExchangeOfferDto): Promise<Offer> {
     const result = await this.p2pClient.createExchangeOffer(dto);
     if (!result) {
-      throw new BadRequestException('Failed to create exchange offer');
+      throw new BadRequestException(ErrorMessages.OFFER_CREATE_FAILED);
     }
     return this.convertExchangeOfferToOffer(result);
   }
@@ -99,7 +100,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   async respondExchangeOffer(@Body() dto: RespondExchangeOfferDto): Promise<Offer> {
     const result = await this.p2pClient.respondExchangeOffer(dto);
     if (!result) {
-      throw new BadRequestException('Failed to respond to exchange offer');
+      throw new BadRequestException(ErrorMessages.OFFER_RESPOND_FAILED);
     }
     return this.convertExchangeOfferToOffer(result);
   }
@@ -124,7 +125,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   async accept(@Param('id') id: string): Promise<Offer> {
     const result = await this.offersService.acceptOffer(id);
     if (!result) {
-      throw new BadRequestException('Failed to accept offer');
+      throw new BadRequestException(ErrorMessages.OFFER_ACCEPT_FAILED);
     }
     return this.convertExchangeOfferToOffer({
       id: result.id,
@@ -142,7 +143,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   async reject(@Param('id') id: string, @Body('reason') reason: string): Promise<Offer> {
     const result = await this.offersService.rejectOffer(id);
     if (!result) {
-      throw new BadRequestException('Failed to reject offer');
+      throw new BadRequestException(ErrorMessages.OFFER_REJECT_FAILED);
     }
     return this.convertExchangeOfferToOffer({
       id: result.id,
@@ -163,7 +164,7 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
       status: 'CANCELLED' 
     });
     if (!result) {
-      throw new BadRequestException('Failed to cancel offer');
+      throw new BadRequestException(ErrorMessages.OFFER_CANCEL_FAILED);
     }
     return result;
   }

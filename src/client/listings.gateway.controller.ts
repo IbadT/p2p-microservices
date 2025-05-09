@@ -1,15 +1,16 @@
 import { Controller, Get, Post, Body, Query, Param, Inject, OnModuleInit, UseGuards, SetMetadata, BadRequestException, Put, Delete } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { ClientGrpc } from '@nestjs/microservices';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../shared/guards/roles.guard';
-import { ExchangeGrpcClient } from './services/exchange.grpc.client';
+import { ExchangeClientService } from './services/exchange.client';
 import { ListingsService } from '../listings/listings.service';
 import { UpdateListingDto } from '../listings/dto/update-listing.dto';
 import { BaseGrpcClient } from './base/base.grpc.client';
 import { Listing, ListingService } from './interfaces/grpc.interfaces';
 import { CreateListingDto } from './interfaces/client.swagger';
 import { ExchangeType, PaymentMethod } from '@prisma/client';
+import { ErrorMessages } from '../shared/constants/error-messages';
 import {
   ApiCreateListing,
   ApiGetAllListings,
@@ -31,13 +32,13 @@ interface ListingFilters {
 @ApiTags('Listings')
 @Controller('api/listings')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class ListingsGatewayController extends BaseGrpcClient implements OnModuleInit {
   private listingService: ListingService;
 
   constructor(
     @Inject('LISTING_PACKAGE') protected readonly client: ClientGrpc,
-    private readonly exchangeClient: ExchangeGrpcClient,
+    private readonly exchangeClient: ExchangeClientService,
     private readonly listingsService: ListingsService
   ) {
     super(client, 'ListingsService');
@@ -66,7 +67,7 @@ export class ListingsGatewayController extends BaseGrpcClient implements OnModul
   async findOne(@Param('id') id: string): Promise<Listing> {
     const result = await this.callGrpcMethod<Listing>(this.listingService.GetListing, { id });
     if (!result) {
-      throw new BadRequestException('Listing not found');
+      throw new BadRequestException(ErrorMessages.LISTING_NOT_FOUND);
     }
     return result;
   }
@@ -76,7 +77,7 @@ export class ListingsGatewayController extends BaseGrpcClient implements OnModul
   async update(@Param('id') id: string, @Body('isActive') isActive: boolean): Promise<Listing> {
     const result = await this.listingsService.updateListingStatus(id, isActive);
     if (!result) {
-      throw new BadRequestException('Failed to update listing');
+      throw new BadRequestException(ErrorMessages.LISTING_UPDATE_FAILED);
     }
     return result;
   }

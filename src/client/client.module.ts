@@ -16,7 +16,7 @@ import { UserGrpcClient } from './services/user.grpc.client';
 import { BalanceGrpcClient } from './services/balance.grpc.client';
 import { DisputeGrpcClient } from './services/dispute.grpc.client';
 import { ReviewsGrpcClient } from './services/reviews.grpc.client';
-import { ExchangeGrpcClient } from './services/exchange.grpc.client';
+import { ExchangeClientService } from './services/exchange.client';
 import { P2PGrpcClient } from './services/p2p.grpc.client';
 import { AuditGrpcClient } from './services/audit.grpc.client';
 import { SchedulerGrpcClient } from './services/scheduler.grpc.client';
@@ -50,6 +50,7 @@ import { AuditModule } from '../audit/audit.module';
 import { SchedulerModule } from '../scheduler/scheduler.module';
 import { BalanceModule } from '../balance/balance.module';
 import { join } from 'path';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
@@ -187,7 +188,7 @@ import { join } from 'path';
           options: {
             package: 'user',
             protoPath: 'src/proto/user.proto',
-            url: configService.get('USER_SERVICE_URL', 'localhost:5000'),
+            url: configService.get('USER_SERVICE_URL', 'localhost:5001'),
           },
         }),
         inject: [ConfigService],
@@ -200,7 +201,7 @@ import { join } from 'path';
           options: {
             package: 'user',
             protoPath: 'src/proto/user.proto',
-            url: configService.get('USER_SERVICE_URL', 'localhost:5000'),
+            url: configService.get('USER_SERVICE_URL', 'localhost:5001'),
           },
         }),
         inject: [ConfigService],
@@ -251,7 +252,7 @@ import { join } from 'path';
           transport: Transport.GRPC,
           options: {
             package: 'exchange',
-            protoPath: 'src/proto/exchange.proto',
+            protoPath: join(__dirname, '../../proto/exchange.proto'),
             url: configService.get('EXCHANGE_SERVICE_URL', 'localhost:5000'),
           },
         }),
@@ -457,7 +458,7 @@ import { join } from 'path';
     BalanceGrpcClient,
     DisputeGrpcClient,
     ReviewsGrpcClient,
-    ExchangeGrpcClient,
+    ExchangeClientService,
     P2PGrpcClient,
     AuditGrpcClient,
     SchedulerGrpcClient,
@@ -466,13 +467,14 @@ import { join } from 'path';
     ListingsGrpcClient,
     OffersGrpcClient,
     AuthGrpcClient,
+    JwtStrategy,
   ],
   exports: [
     UserGrpcClient,
     BalanceGrpcClient,
     DisputeGrpcClient,
     ReviewsGrpcClient,
-    ExchangeGrpcClient,
+    ExchangeClientService,
     P2PGrpcClient,
     AuditGrpcClient,
     SchedulerGrpcClient,

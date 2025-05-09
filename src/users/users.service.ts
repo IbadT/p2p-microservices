@@ -20,6 +20,9 @@ export class UsersService {
   async createUser(data: {
     email: string;
     password: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
     role?: UserRole;
     isExchanger?: boolean;
   }) {
@@ -27,6 +30,7 @@ export class UsersService {
       data: {
         email: data.email,
         password: data.password,
+        name: `${data.firstName} ${data.lastName}`,
         role: data.role || UserRole.CUSTOMER,
         isExchangerActive: data.isExchanger || false,
       },

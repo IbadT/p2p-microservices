@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException, Inject } from '@nestjs/common';
 import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { CreateDisputeDto, ResolveDisputeDto, AddCommentDto } from './interfaces/client.swagger';
 import { DisputeWithRelations } from './interfaces/grpc.interfaces';
 import {
@@ -16,7 +16,7 @@ import { DISPUTE_SERVICE } from './constants';
 @ApiTags('Disputes')
 @Controller('disputes')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class DisputesGatewayController {
   private disputeService: any;
 

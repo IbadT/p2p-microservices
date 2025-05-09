@@ -25,6 +25,7 @@ model User {
   id                String         @id @default(uuid())
   email             String         @unique
   password          String
+  name              String
   role              UserRole       @default(CUSTOMER)
   isExchangerActive Boolean        @default(false)
   isFrozen          Boolean        @default(false)
@@ -50,6 +51,8 @@ model User {
 
   @@index([isExchangerActive])
   @@index([isFrozen])
+
+  @@map("users")
 }
 
 enum UserRole {
@@ -83,6 +86,7 @@ model ExchangeListing {
   @@index([type])
   @@index([isActive])
   @@index([userId])
+  @@map("exchange_listings")
 }
 
 enum ExchangeType {
@@ -115,6 +119,7 @@ model ExchangeOffer {
   @@index([status])
   @@index([userId])
   @@index([listingId])
+  @@map("exchange_offers")
 }
 
 enum TransactionStatus {
@@ -165,6 +170,7 @@ model ExchangeTransaction {
   @@index([confirmationDeadline])
   @@index([isActive])
   @@index([finishedAt])
+  @@map("exchange_transactions")
 }
 
 model Dispute {
@@ -186,6 +192,7 @@ model Dispute {
 
   @@index([status])
   @@index([initiatorId])
+  @@map("disputes")
 }
 
 enum DisputeStatus {
@@ -211,6 +218,7 @@ model Review {
 
   @@index([authorId])
   @@index([targetId])
+  @@map("reviews")
 }
 
 model UserBalance {
@@ -237,6 +245,7 @@ model BalanceHold {
 
   @@index([userId])
   @@index([expiresAt])
+  @@map("balance_holds")
 }
 
 enum HoldType {
@@ -255,6 +264,8 @@ model ExchangerSettings {
   minimumRating     Float?    // Minimum customer rating to accept
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@map("exchanger_settings")
 }
 
 model AuditLog {
@@ -269,6 +280,7 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([userId])
+  @@map("audit_logs")
 }
 
 model ScheduledTask {
@@ -284,6 +296,7 @@ model ScheduledTask {
   @@index([type])
   @@index([status])
   @@index([scheduledAt])
+  @@map("scheduled_tasks")
 }
 
 enum TaskStatus {
@@ -301,4 +314,6 @@ model ExchangerStatus {
   frozenReason  String?
   lastActivity  DateTime  @default(now())
   exchanger     User      @relation(fields: [exchangerId], references: [id])
+
+  @@map("exchanger_status")
 }

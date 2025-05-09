@@ -228,6 +228,27 @@ export interface FreezeExchangerResponse {
   message: string;
 }
 
+export interface UpdateMissedOffersRequest {
+  exchangerId: string;
+  increment: boolean;
+}
+
+export interface GetExchangerStatusRequest {
+  exchangerId: string;
+}
+
+export interface UnfreezeExchangerRequest {
+  exchangerId: string;
+}
+
+export interface ExchangerStatus {
+  exchangerId: string;
+  online: boolean;
+  missedOffersCount: number;
+  lastActiveAt: string;
+  isFrozen: boolean;
+}
+
 export const EXCHANGE_PACKAGE_NAME = "exchange";
 
 export interface ExchangeServiceClient {
@@ -263,6 +284,12 @@ export interface ExchangeServiceClient {
   setExchangerStatus(request: SetExchangerStatusRequest, metadata?: Metadata): Observable<SetExchangerStatusResponse>;
 
   freezeExchanger(request: FreezeExchangerRequest, metadata?: Metadata): Observable<FreezeExchangerResponse>;
+
+  updateMissedOffers(request: UpdateMissedOffersRequest, metadata?: Metadata): Observable<ExchangerStatus>;
+
+  getExchangerStatus(request: GetExchangerStatusRequest, metadata?: Metadata): Observable<ExchangerStatus>;
+
+  unfreezeExchanger(request: UnfreezeExchangerRequest, metadata?: Metadata): Observable<ExchangerStatus>;
 }
 
 export interface ExchangeServiceController {
@@ -328,6 +355,21 @@ export interface ExchangeServiceController {
     request: FreezeExchangerRequest,
     metadata?: Metadata,
   ): Promise<FreezeExchangerResponse> | Observable<FreezeExchangerResponse> | FreezeExchangerResponse;
+
+  updateMissedOffers(
+    request: UpdateMissedOffersRequest,
+    metadata?: Metadata,
+  ): Promise<ExchangerStatus> | Observable<ExchangerStatus> | ExchangerStatus;
+
+  getExchangerStatus(
+    request: GetExchangerStatusRequest,
+    metadata?: Metadata,
+  ): Promise<ExchangerStatus> | Observable<ExchangerStatus> | ExchangerStatus;
+
+  unfreezeExchanger(
+    request: UnfreezeExchangerRequest,
+    metadata?: Metadata,
+  ): Promise<ExchangerStatus> | Observable<ExchangerStatus> | ExchangerStatus;
 }
 
 export function ExchangeServiceControllerMethods() {
@@ -344,6 +386,9 @@ export function ExchangeServiceControllerMethods() {
       "cancelTransaction",
       "setExchangerStatus",
       "freezeExchanger",
+      "updateMissedOffers",
+      "getExchangerStatus",
+      "unfreezeExchanger",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

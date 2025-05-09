@@ -21,6 +21,9 @@ service ExchangeService {
   // Exchanger Management
   rpc SetExchangerStatus (SetExchangerStatusRequest) returns (SetExchangerStatusResponse);
   rpc FreezeExchanger (FreezeExchangerRequest) returns (FreezeExchangerResponse);
+  rpc UpdateMissedOffers (UpdateMissedOffersRequest) returns (ExchangerStatus);
+  rpc GetExchangerStatus (GetExchangerStatusRequest) returns (ExchangerStatus);
+  rpc UnfreezeExchanger (UnfreezeExchangerRequest) returns (ExchangerStatus);
 }
 
 // Enums
@@ -218,4 +221,25 @@ message FreezeExchangerResponse {
   string exchangerId = 1;
   bool isFrozen = 2;
   string message = 3;
+}
+
+message UpdateMissedOffersRequest {
+  string exchangerId = 1;
+  bool increment = 2;
+}
+
+message GetExchangerStatusRequest {
+  string exchangerId = 1;
+}
+
+message UnfreezeExchangerRequest {
+  string exchangerId = 1;
+}
+
+message ExchangerStatus {
+  string exchangerId = 1;
+  bool online = 2;
+  int32 missedOffersCount = 3;
+  string lastActiveAt = 4;
+  bool isFrozen = 5;
 } 

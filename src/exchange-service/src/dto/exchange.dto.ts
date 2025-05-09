@@ -54,10 +54,39 @@ export class UpdateTransactionStatusDto {
   paymentProof?: string;
 }
 
+export class CreateDisputeDto {
+  @IsString()
+  transactionId: string;
+
+  @IsString()
+  initiatorId: string;
+
+  @IsString()
+  reason: string;
+
+  @IsEnum(['CUSTOMER', 'EXCHANGER'])
+  initiatorRole: 'CUSTOMER' | 'EXCHANGER';
+}
+
+export class CreateReviewDto {
+  @IsString()
+  transactionId: string;
+
+  @IsString()
+  authorId: string;
+
+  @IsNumber()
+  rating: number;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
+
 export class ExchangeListingFilterDto {
   @IsOptional()
-  @IsEnum(ExchangeType)
-  type?: ExchangeType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsString()
@@ -76,9 +105,7 @@ export class ExchangeListingFilterDto {
   maxRate?: number;
 
   @IsOptional()
-  @IsArray()
-  @IsEnum(PaymentMethod, { each: true })
-  paymentMethods?: PaymentMethod[];
+  paymentMethods?: string[];
 
   @IsOptional()
   isActive?: boolean;

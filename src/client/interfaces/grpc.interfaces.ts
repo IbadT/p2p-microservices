@@ -257,6 +257,12 @@ export interface ExchangeService extends GrpcService {
   CreateListing: GrpcMethod<CreateListingDto, Listing>;
   
   GetExchange: GrpcMethod<{ id: string }, Exchange>;
+
+  // New methods for exchanger status management
+  UpdateMissedOffers: GrpcMethod<{ exchangerId: string; increment: boolean }, ExchangerStatus>;
+  GetExchangerStatus: GrpcMethod<{ exchangerId: string }, ExchangerStatus>;
+  UnfreezeExchanger: GrpcMethod<{ exchangerId: string }, ExchangerStatus>;
+
   [key: string]: GrpcMethod<any, any>;
 }
 
@@ -533,4 +539,12 @@ export interface DisputeWithRelations extends PrismaDispute {
     customer: Pick<PrismaUser, 'id' | 'email'>;
     exchanger: Pick<PrismaUser, 'id' | 'email'>;
   };
+}
+
+export interface ExchangerStatus {
+  exchangerId: string;
+  online: boolean;
+  missedOffersCount: number;
+  lastActiveAt: string;
+  isFrozen: boolean;
 } 

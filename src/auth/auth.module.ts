@@ -1,20 +1,23 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
 import type { RedisClientOptions } from 'redis';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthService } from './auth.service';
+import { AuthGatewayController } from '../client/auth.gateway.controller';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { PrismaModule } from 'src/prisma.module';
 
 @Module({
   imports: [
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
-      }),
-      inject: [ConfigService],
+    PrismaModule,
+    PassportModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '15m' },
     }),
     CacheModule.registerAsync<RedisClientOptions>({
       imports: [ConfigModule],
@@ -29,7 +32,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
       inject: [ConfigService],
     }),
   ],
-  providers: [JwtAuthGuard],
-  exports: [JwtAuthGuard],
+  controllers: [AuthGatewayController],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService],
 })
 export class AuthModule {} 

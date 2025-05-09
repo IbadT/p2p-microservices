@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BalanceGrpcClient } from './services/balance.grpc.client';
 import { 
@@ -24,7 +24,7 @@ import {
 @ApiTags('Balance')
 @Controller('balance')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class BalanceGatewayController {
   constructor(private readonly balanceClient: BalanceGrpcClient) {}
 

@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { AuthenticatedRequest } from './shared/interfaces/request.interface';
 
 @ApiTags('Health')
 @Controller()
@@ -64,7 +65,7 @@ export class AppController {
       }
     }
   })
-  async checkHealth() {
+  async checkHealth(@Req() req: AuthenticatedRequest) {    
     return this.appService.checkHealth();
   }
 }

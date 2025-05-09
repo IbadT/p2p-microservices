@@ -20,11 +20,9 @@ message CreateUserRequest {
 
 message UpdateUserRequest {
   string userId = 1;
-  optional string firstName = 2;
-  optional string lastName = 3;
-  optional string phoneNumber = 4;
-  optional bool isExchanger = 5;
-  optional bool isExchangerActive = 6;
+  optional string email = 2;
+  optional string password = 3;
+  optional string role = 4;
 }
 
 message GetUserRequest {
@@ -34,12 +32,10 @@ message GetUserRequest {
 message User {
   string id = 1;
   string email = 2;
-  string firstName = 3;
-  string lastName = 4;
-  string phoneNumber = 5;
-  bool isExchanger = 6;
-  bool isExchangerActive = 7;
-  bool isFrozen = 8;
-  string createdAt = 9;
-  string updatedAt = 10;
+  string name = 3;
+  bool isExchanger = 4;
+  bool isExchangerActive = 5;
+  bool isFrozen = 6;
+  string createdAt = 7;
+  string updatedAt = 8;
 } 

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 import { UserGrpcClient } from './services/user.grpc.client';
 import { CreateUserDto, UpdateUserDto } from './interfaces/client.swagger';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity } from '@nestjs/swagger';
 import { User } from './interfaces/grpc.interfaces';
 import { SecurityManager } from '../shared/utils/security.utils';
 import { QueueManager } from '../shared/utils/queue.utils';
@@ -25,7 +25,7 @@ import {
 } from './swagger/client.swagger';
 
 @ApiTags('Users')
-@ApiBearerAuth()
+// @ApiSecurity('JWT-auth')
 @Controller('users')
 @UseGuards(RateLimitGuard)
 export class UsersGatewayController {

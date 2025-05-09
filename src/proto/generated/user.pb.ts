@@ -23,11 +23,9 @@ export interface CreateUserRequest {
 
 export interface UpdateUserRequest {
   userId: string;
-  firstName?: string | undefined;
-  lastName?: string | undefined;
-  phoneNumber?: string | undefined;
-  isExchanger?: boolean | undefined;
-  isExchangerActive?: boolean | undefined;
+  email?: string | undefined;
+  password?: string | undefined;
+  role?: string | undefined;
 }
 
 export interface GetUserRequest {
@@ -37,9 +35,7 @@ export interface GetUserRequest {
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
+  name: string;
   isExchanger: boolean;
   isExchangerActive: boolean;
   isFrozen: boolean;

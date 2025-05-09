@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../shared/guards/jwt-auth.guard';
 import { RateLimitGuard } from '../shared/guards/rate-limit.guard';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CreateReviewDto } from '../reviews/dto/create-review.dto';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import {
   ApiCreateReview,
   ApiGetAllReviews,
@@ -16,7 +16,7 @@ import { ClientGrpc } from '@nestjs/microservices';
 @ApiTags('Reviews')
 @Controller('reviews')
 @UseGuards(JwtAuthGuard, RateLimitGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class ReviewsGatewayController extends BaseGrpcClient implements OnModuleInit {
   constructor(
     @Inject('REVIEWS_PACKAGE') protected readonly client: ClientGrpc,

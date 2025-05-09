@@ -16,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
         options: {
           package: 'user',
           protoPath: 'src/proto/user.proto',
+          url: 'localhost:5001',
         },
       },
     ]),

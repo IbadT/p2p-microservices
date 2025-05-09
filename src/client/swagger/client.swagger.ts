@@ -10,6 +10,14 @@ import { CreateReviewDto } from '../interfaces/client.swagger';
 import { CreateTaskDto } from 'src/scheduler/dto/create-task.dto';
 import { BalanceResponse, BalanceHoldResponse, TransactionHistoryResponse } from './balance.swagger';
 
+class ExchangerStatus {
+  exchangerId: string;
+  online: boolean;
+  missedOffersCount: number;
+  lastActiveAt: Date;
+  isFrozen: boolean;
+}
+
 class UserDto {
   id: string;
   email: string;
@@ -593,4 +601,37 @@ export function ApiCancelScheduledTask() {
     ApiResponse({ status: 404, description: 'Task not found.' }),
     ApiParam({ name: 'id', required: true, description: 'Task ID' })
   );
-} 
+}
+
+export const ApiGetExchangerStatus = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Get exchanger status' }),
+    ApiResponse({
+      status: 200,
+      description: 'Returns the current status of the exchanger',
+      type: ExchangerStatus
+    })
+  );
+};
+
+export const ApiUpdateMissedOffers = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Update missed offers count' }),
+    ApiResponse({
+      status: 200,
+      description: 'Updates the count of missed offers and returns updated status',
+      type: ExchangerStatus
+    })
+  );
+};
+
+export const ApiUnfreezeExchanger = () => {
+  return applyDecorators(
+    ApiOperation({ summary: 'Unfreeze exchanger' }),
+    ApiResponse({
+      status: 200,
+      description: 'Unfreezes the exchanger and returns updated status',
+      type: ExchangerStatus
+    })
+  );
+}; 

@@ -9,6 +9,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { Response, Request } from 'express';
 import * as Sentry from '@sentry/node';
+import { ErrorMessages } from '../shared/constants/error-messages';
 
 // Импортируем конкретные типы ошибок Prisma из правильного места
 import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
@@ -65,19 +66,19 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         case 'P2002':
           return {
             status: HttpStatus.CONFLICT,
-            message: 'Нарушение уникального ограничения',
+            message: ErrorMessages.DB_UNIQUE_CONSTRAINT,
             errorCode: exception.code,
           };
         case 'P2025':
           return {
             status: HttpStatus.NOT_FOUND,
-            message: 'Запись не найдена',
+            message: ErrorMessages.DB_RECORD_NOT_FOUND,
             errorCode: exception.code,
           };
         case 'P2003':
           return {
             status: HttpStatus.BAD_REQUEST,
-            message: 'Нарушение внешнего ключа',
+            message: ErrorMessages.DB_FOREIGN_KEY,
             errorCode: exception.code,
           };
         case 'P2014':
@@ -105,7 +106,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     if (exception instanceof PrismaClientValidationError) {
       return {
         status: HttpStatus.BAD_REQUEST,
-        message: 'Ошибка валидации данных',
+        message: ErrorMessages.DB_VALIDATION,
         errorCode: 'VALIDATION_ERROR',
       };
     }
@@ -114,7 +115,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const response = exception.getResponse();
-      let message = 'Ошибка сервера';
+      let message: string = ErrorMessages.NOT_FOUND;
 
       if (typeof response === 'string') {
         message = response;

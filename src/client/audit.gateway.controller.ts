@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, UseGuards, Param } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuditService } from '../audit/audit.service';
 import { CreateAuditLogDto } from '../audit/dto/create-audit-log.dto';
@@ -8,7 +8,7 @@ import { ApiCreateAuditLog, ApiGetAllAuditLogs, ApiGetAuditLogById } from './swa
 @ApiTags('Audit')
 @Controller('audit')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiSecurity('JWT-auth')
 export class AuditGatewayController {
   constructor(private readonly auditService: AuditService) {}
 
