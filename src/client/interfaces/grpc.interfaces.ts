@@ -19,7 +19,7 @@ export interface User {
   missedOffersCount: number;
   createdAt: Date;
   updatedAt: Date;
-  name?: string;
+  name: string | null;
   isOnline?: boolean;
 }
 
@@ -33,6 +33,12 @@ export interface Offer {
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
   createdAt: string;
   updatedAt: string;
+  dealType?: 'FIAT_TO_CRYPTO' | 'CRYPTO_TO_FIAT';
+  holdCreated?: boolean;
+  cryptocurrency?: string;
+  fiatCurrency?: string;
+  cryptoAmount?: number;
+  fiatAmount?: number;
 }
 
 export interface Dispute {
@@ -53,9 +59,24 @@ export interface ExchangeOffer {
   customerId: string;
   listingId: string;
   amount: number;
-  exchangeType: string;
+  exchangeType: 'CRYPTO_TO_FIAT' | 'FIAT_TO_CRYPTO';
   conditions: string;
   status: string;
+  cryptocurrency?: string;
+  fiatCurrency?: string;
+  cryptoAmount?: number;
+  fiatAmount?: number;
+  holdCreated?: boolean;
+  transaction?: {
+    id: string;
+    cryptoAmount: number;
+    fiatAmount: number;
+  };
+  listing?: {
+    type: 'CRYPTO_TO_FIAT' | 'FIAT_TO_CRYPTO';
+    cryptocurrency: string;
+    fiatCurrency: string;
+  };
 }
 
 export interface Listing {

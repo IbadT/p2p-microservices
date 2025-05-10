@@ -10,6 +10,8 @@ import { CreateReviewDto } from '../interfaces/client.swagger';
 import { CreateTaskDto } from 'src/scheduler/dto/create-task.dto';
 import { BalanceResponse, BalanceHoldResponse, TransactionHistoryResponse } from './balance.swagger';
 import { ChatHistory, Comment } from '../interfaces/client.swagger';
+import { VerifyPaymentDto, RejectPaymentDto, PaymentResponseDto } from '../interfaces/payment.dto';
+import { PaymentWebhookDto } from '../interfaces/payment.dto';
 
 class ExchangerStatus {
   exchangerId: string;
@@ -774,4 +776,202 @@ export const ApiGetDisputeBalance = () => {
     ApiResponse({ status: 404, description: 'Dispute not found' }),
     ApiResponse({ status: 403, description: 'Forbidden - Only moderators can access this endpoint' })
   );
-}; 
+};
+
+export function ApiVerifyPayment() {
+  return applyDecorators(
+    ApiOperation({ 
+      summary: 'Верификация платежа', 
+      description: 'Подтверждение платежа модератором или администратором' 
+    }),
+    ApiParam({ 
+      name: 'transactionId', 
+      description: 'ID транзакции',
+      required: true,
+      example: '123e4567-e89b-12d3-a456-426614174000'
+    }),
+    ApiBody({ 
+      type: VerifyPaymentDto,
+      examples: {
+        example1: {
+          value: {
+            verifiedBy: '123e4567-e89b-12d3-a456-426614174000'
+          },
+          summary: 'Пример верификации платежа'
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 200, 
+      description: 'Платеж успешно верифицирован',
+      type: PaymentResponseDto,
+      examples: {
+        example1: {
+          value: {
+            success: true,
+            message: 'Платеж успешно верифицирован'
+          },
+          summary: 'Успешная верификация'
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 403, 
+      description: 'Доступ запрещен. Требуются права модератора или администратора' 
+    }),
+    ApiResponse({ 
+      status: 404, 
+      description: 'Транзакция не найдена' 
+    })
+  );
+}
+
+export function ApiRejectPayment() {
+  return applyDecorators(
+    ApiOperation({ 
+      summary: 'Отклонение платежа', 
+      description: 'Отклонение платежа модератором или администратором' 
+    }),
+    ApiParam({ 
+      name: 'transactionId', 
+      description: 'ID транзакции',
+      required: true,
+      example: '123e4567-e89b-12d3-a456-426614174000'
+    }),
+    ApiBody({ 
+      type: RejectPaymentDto,
+      examples: {
+        example1: {
+          value: {
+            rejectedBy: '123e4567-e89b-12d3-a456-426614174000',
+            reason: 'Неверные реквизиты платежа'
+          },
+          summary: 'Пример отклонения платежа'
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 200, 
+      description: 'Платеж успешно отклонен',
+      type: PaymentResponseDto,
+      examples: {
+        example1: {
+          value: {
+            success: true,
+            message: 'Платеж успешно отклонен'
+          },
+          summary: 'Успешное отклонение'
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 403, 
+      description: 'Доступ запрещен. Требуются права модератора или администратора' 
+    }),
+    ApiResponse({ 
+      status: 404, 
+      description: 'Транзакция не найдена' 
+    })
+  );
+}
+
+export function ApiUpdatePaymentStatus() {
+  return applyDecorators(
+    ApiOperation({ 
+      summary: 'Обновление статуса платежа', 
+      description: 'Обновление статуса платежа через вебхук' 
+    }),
+    ApiParam({ 
+      name: 'transactionId', 
+      description: 'ID транзакции',
+      required: true,
+      example: '123e4567-e89b-12d3-a456-426614174000'
+    }),
+    ApiBody({ 
+      schema: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'],
+            example: 'COMPLETED'
+          },
+          provider: {
+            type: 'string',
+            enum: ['BANK_TRANSFER', 'CREDIT_CARD', 'PAYPAL', 'CRYPTO'],
+            example: 'BANK_TRANSFER'
+          },
+          amount: {
+            type: 'number',
+            example: 1000.50
+          },
+          currency: {
+            type: 'string',
+            example: 'USD'
+          },
+          reference: {
+            type: 'string',
+            example: 'PAY-123456'
+          },
+          metadata: {
+            type: 'object',
+            example: {
+              bankName: 'Example Bank',
+              accountNumber: '****1234'
+            }
+          }
+        },
+        required: ['status', 'provider', 'amount', 'currency']
+      },
+      examples: {
+        example1: {
+          value: {
+            status: 'COMPLETED',
+            provider: 'BANK_TRANSFER',
+            amount: 1000.50,
+            currency: 'USD',
+            reference: 'PAY-123456',
+            metadata: {
+              bankName: 'Example Bank',
+              accountNumber: '****1234'
+            }
+          },
+          summary: 'Пример успешного платежа'
+        },
+        example2: {
+          value: {
+            status: 'FAILED',
+            provider: 'CREDIT_CARD',
+            amount: 500.75,
+            currency: 'EUR',
+            reference: 'PAY-123457',
+            metadata: {
+              errorCode: 'INSUFFICIENT_FUNDS',
+              errorMessage: 'Insufficient funds on card'
+            }
+          },
+          summary: 'Пример неудачного платежа'
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 200, 
+      description: 'Статус платежа успешно обновлен',
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Payment status updated successfully' }
+        }
+      }
+    }),
+    ApiResponse({ 
+      status: 400, 
+      description: 'Неверный формат данных' 
+    }),
+    ApiResponse({ 
+      status: 404, 
+      description: 'Транзакция не найдена' 
+    })
+  );
+} 

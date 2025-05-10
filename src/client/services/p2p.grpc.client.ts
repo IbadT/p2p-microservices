@@ -145,7 +145,7 @@ export class P2PGrpcClient extends BaseGrpcClient {
       customerId: '',
       listingId: '',
       amount: 0,
-      exchangeType: '',
+      exchangeType: 'CRYPTO_TO_FIAT',
       conditions: '',
       status: status.status
     };

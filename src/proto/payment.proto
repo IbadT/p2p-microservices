@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package payment;
+
+service PaymentService {
+  rpc HandleWebhook (PaymentWebhookRequest) returns (PaymentWebhookResponse);
+  rpc GetPaymentStatus (GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+}
+
+message PaymentWebhookRequest {
+  string transactionId = 1;
+  string status = 2;
+  string provider = 3;
+  double amount = 4;
+  string currency = 5;
+  optional string reference = 6;
+  optional string metadata = 7;
+}
+
+message PaymentWebhookResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetPaymentStatusRequest {
+  string transactionId = 1;
+}
+
+message GetPaymentStatusResponse {
+  string status = 1;
+  string provider = 2;
+  double amount = 3;
+  string currency = 4;
+  optional string reference = 5;
+  optional string metadata = 6;
+} 

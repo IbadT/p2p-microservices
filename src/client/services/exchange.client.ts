@@ -32,6 +32,7 @@ interface ExchangeService {
   GetExchangerStatus(request: { exchangerId: string }): Observable<ExchangerStatus>;
   UpdateMissedOffers(request: { exchangerId: string; increment: boolean }): Observable<ExchangerStatus>;
   UnfreezeExchanger(request: { exchangerId: string }): Observable<ExchangerStatus>;
+  FreezeExchanger(request: { exchangerId: string; reason: string }): Observable<ExchangerStatus>;
 }
 
 @Injectable()
@@ -98,5 +99,9 @@ export class ExchangeClientService implements OnModuleInit {
 
   async unfreezeExchanger(exchangerId: string): Promise<ExchangerStatus> {
     return firstValueFrom(this.exchangeService.UnfreezeExchanger({ exchangerId }));
+  }
+
+  async freezeExchanger(data: { exchangerId: string; reason: string }): Promise<ExchangerStatus> {
+    return firstValueFrom(this.exchangeService.FreezeExchanger(data));
   }
 } 

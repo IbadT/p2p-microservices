@@ -1,51 +1,14 @@
-// Сервис ExchangeService:
-// ✅ Корректная обработка статусов транзакций
-// ✅ Правильная конвертация между разными типами статусов
-// ✅ Корректная работа с базой данных через Prisma
-// ✅ Логирование ошибок
-// ✅ Обработка уведомлений через Kafka
-// Контроллер ExchangeController:
-// ✅ Правильные HTTP методы для каждого эндпоинта
-// ✅ Корректные типы параметров
-// ✅ Валидация входных данных через DTO
-// ✅ Соответствие методов сервису
-// DTO:
-// ✅ Валидация полей через class-validator
-// ✅ Правильные типы данных
-// ✅ Опциональные поля где необходимо
-// Основные бизнес-процессы:
-// ✅ Создание и управление листингами
-// ✅ Обработка офферов
-// ✅ Управление транзакциями
-// ✅ Система споров
-// ✅ Система отзывов
-// ✅ Управление статусом обменника
-// Безопасность:
-// ✅ Проверка прав доступа
-// ✅ Валидация входных данных
-// ✅ Безопасная работа с криптовалютой
-// ✅ Аудит действий
-// Дополнительные функции:
-// ✅ Архивация старых транзакций
-// ✅ Отслеживание пропущенных офферов
-// ✅ Уведомления через Kafka
-// ✅ Работа с балансами
-// Код выглядит хорошо структурированным и следует лучшим практикам. Основные улучшения, которые были внесены:
-// Исправлены типы данных в контроллере
-// Добавлены DTO для валидации
-// Улучшена обработка статусов транзакций
-// Добавлена корректная конвертация между разными типами статусов
-
-
-
-
-
-
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ExchangeService } from '../services/exchange.service';
 import { CreateDisputeDto, CreateReviewDto } from '../dto/exchange.dto';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { ExchangerStatus } from '../../../client/interfaces/exchange.interface';
+import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
+import { UserRole } from 'src/shared/decorators/roles.decorator';
 
 @Controller('exchange')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ExchangeController {
   constructor(private readonly exchangeService: ExchangeService) {}
 
@@ -64,17 +27,57 @@ export class ExchangeController {
     return this.exchangeService.createReview(data);
   }
 
-  @Put('exchanger/:id/status')
+  @Post('exchanger/status')
+  @Roles(UserRole.EXCHANGER)
   async setExchangerStatus(
-    @Param('id') exchangerId: string,
-    @Body('online') online: boolean
+    @Body() data: { exchangerId: string; online: boolean }
   ) {
-    return this.exchangeService.setExchangerStatus({ exchangerId, online });
+    const response = await this.exchangeService.setExchangerStatus(data);
+    return {
+      exchangerId: response.exchangerId,
+      online: response.online,
+      missedOffersCount: 0,
+      lastActiveAt: new Date().toISOString(),
+      isFrozen: false
+    };
   }
 
-  @Put('exchanger/:id/missed-offers')
-  async incrementMissedOffers(@Param('id') exchangerId: string) {
-    return this.exchangeService.incrementMissedOffers(exchangerId);
+  @Get('exchanger/status/:exchangerId')
+  async getExchangerStatus(
+    @Param('exchangerId') exchangerId: string
+  ): Promise<ExchangerStatus> {
+    return this.exchangeService.getExchangerStatus(exchangerId);
+  }
+
+  @Post('exchanger/freeze')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  async freezeExchanger(
+    @Body() data: { exchangerId: string; reason: string }
+  ): Promise<ExchangerStatus> {
+    const response = await this.exchangeService.freezeExchanger(data);
+    return {
+      exchangerId: response.exchangerId,
+      online: false,
+      missedOffersCount: 0,
+      lastActiveAt: new Date().toISOString(),
+      isFrozen: true
+    };
+  }
+
+  @Post('exchanger/unfreeze/:exchangerId')
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN)
+  async unfreezeExchanger(
+    @Param('exchangerId') exchangerId: string
+  ): Promise<ExchangerStatus> {
+    return this.exchangeService.unfreezeExchanger(exchangerId);
+  }
+
+  @Post('exchanger/missed-offers')
+  @Roles(UserRole.EXCHANGER)
+  async updateMissedOffers(
+    @Body() data: { exchangerId: string; increment: boolean }
+  ): Promise<ExchangerStatus> {
+    return this.exchangeService.updateMissedOffers(data.exchangerId, data.increment);
   }
 }
 

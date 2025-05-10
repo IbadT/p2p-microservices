@@ -247,7 +247,7 @@ message UnfreezeExchangerRequest {
 message ExchangerStatus {
   string exchangerId = 1;
   bool online = 2;
-  int32 missedOffersCount = 3;
-  string lastActiveAt = 4;
-  bool isFrozen = 5;
+  string lastActiveAt = 3;
+  bool isFrozen = 4;
+  int32 missedOffersCount = 5;
 } 

@@ -15,6 +15,7 @@ import { BalanceModule } from './balance/balance.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { PaymentModule } from './payment-service/src/payment.module';
 // import { ExchangeModule } from './exchange-service/src/exchange.module';
 // import { DisputeModule } from './dispute-service/src/dispute.module';
 import { PrismaClient } from '@prisma/client';
@@ -54,6 +55,7 @@ import { KafkaService } from './kafka/kafka.service';
     AuditModule,
     NotificationsModule,
     SchedulerModule,
+    PaymentModule,
     // ExchangeModule,
     // DisputeModule,
     ClientModule,

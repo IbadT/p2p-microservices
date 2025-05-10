@@ -8,7 +8,7 @@ import { NotificationType } from '../client/interfaces/enums';
 type Comment = PrismaComment & {
   user: {
     id: string;
-    name: string;
+    name: string | null;
     role: UserRole;
   };
 };

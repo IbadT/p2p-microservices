@@ -455,6 +455,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'PAYMENT_VERIFICATION_PACKAGE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'paymentverification',
+            protoPath: 'src/proto/payment-verification.proto',
+            url: configService.get('PAYMENT_VERIFICATION_SERVICE_URL', 'localhost:5000'),
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
   ],
   controllers: [

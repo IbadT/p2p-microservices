@@ -1,0 +1,29 @@
+ syntax = "proto3";
+
+package paymentverification;
+
+service PaymentVerificationService {
+  rpc VerifyPayment (VerifyPaymentRequest) returns (VerifyPaymentResponse);
+  rpc RejectPayment (RejectPaymentRequest) returns (RejectPaymentResponse);
+}
+
+message VerifyPaymentRequest {
+  string transactionId = 1;
+  string verifiedBy = 2;
+}
+
+message VerifyPaymentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RejectPaymentRequest {
+  string transactionId = 1;
+  string rejectedBy = 2;
+  string reason = 3;
+}
+
+message RejectPaymentResponse {
+  bool success = 1;
+  string message = 2;
+}

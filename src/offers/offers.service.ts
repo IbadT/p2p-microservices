@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
 import { KafkaService } from 'src/kafka/kafka.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionStatus, ExchangeType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 import { NotificationType } from 'src/client/interfaces/enums';
-import { TransactionStatus } from '@prisma/client';
+import { BalanceService } from '../balance/balance.service';
 // import { NotificationType } from '../notifications/notification-type.enum';
 
 @Injectable()
@@ -17,6 +17,7 @@ export class OffersService {
     private kafka: KafkaService,
     private notificationsGateway: NotificationsGateway,
     private auditService: AuditService,
+    private balanceService: BalanceService,
   ) {}
 
   async createOffer(userId: string, data: {
@@ -33,15 +34,28 @@ export class OffersService {
 
     // Start transaction
     return this.prisma.$transaction(async (prisma) => {
-      // Create hold on user's balance
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_HOLD_CREATED,
-        payload: {
-          userId,
-          amount: data.amount,
-          type: 'EXCHANGE_OFFER',
-        }
-      });
+      // For Crypto2Fiat transactions, create hold on customer's crypto balance
+      if (listing.type === ExchangeType.CRYPTO_TO_FIAT) {
+        // Create actual hold on customer's balance
+        await this.balanceService.createHold(
+          userId, // customer's ID
+          listing.cryptocurrency,
+          data.amount,
+          'EXCHANGE_OFFER',
+          undefined // transaction ID will be set later
+        );
+
+        // Emit Kafka event for notification
+        await this.kafka.sendEvent({
+          type: NotificationType.BALANCE_HOLD_CREATED,
+          payload: {
+            userId,
+            amount: data.amount,
+            cryptocurrency: listing.cryptocurrency,
+            type: 'EXCHANGE_OFFER'
+          }
+        });
+      }
 
       // Create offer
       const offer = await prisma.exchangeOffer.create({
@@ -164,13 +178,82 @@ export class OffersService {
   }
 
   async acceptOffer(id: string) {
-    return this.prisma.exchangeOffer.update({
+    const offer = await this.prisma.exchangeOffer.findUnique({
       where: { id },
-      data: { status: TransactionStatus.APPROVED },
       include: {
         transaction: true,
         listing: true,
       },
+    });
+
+    if (!offer || !offer.transaction) {
+      throw new Error('Offer or transaction not found');
+    }
+
+    // Store transaction ID to avoid repeated null checks
+    const transactionId = offer.transaction.id;
+
+    // Start transaction to ensure atomicity
+    return this.prisma.$transaction(async (prisma) => {
+      // Update offer status
+      const updatedOffer = await prisma.exchangeOffer.update({
+        where: { id },
+        data: { status: TransactionStatus.ACCEPTED },
+        include: {
+          transaction: true,
+          listing: true,
+        },
+      });
+
+      // Update transaction status
+      await prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: { status: TransactionStatus.ACCEPTED }
+      });
+
+      // Emit Kafka event
+      await this.kafka.sendEvent({
+        type: NotificationType.OFFER_CREATED,
+        payload: {
+          offerId: id,
+          transactionId,
+          listingId: offer.listing.id,
+          amount: offer.amount,
+          type: offer.listing.type
+        }
+      });
+
+      // Notify both participants
+      this.notificationsGateway.notifyUser(offer.userId, NotificationType.OFFER_CREATED, {
+        offerId: id,
+        transactionId,
+        listingId: offer.listing.id,
+        amount: offer.amount
+      });
+
+      this.notificationsGateway.notifyUser(offer.listing.userId, NotificationType.OFFER_CREATED, {
+        offerId: id,
+        transactionId,
+        listingId: offer.listing.id,
+        amount: offer.amount
+      });
+
+      // Create audit log
+      await this.auditService.createAuditLog({
+        userId: offer.listing.userId,
+        action: 'ACCEPT_OFFER',
+        entityType: 'ExchangeOffer',
+        entityId: id,
+        metadata: {
+          transactionId,
+          listingId: offer.listing.id,
+          amount: offer.amount,
+          type: offer.listing.type,
+          cryptoHoldCreated: false // No hold created for Fiat2Crypto
+        }
+      });
+
+      return updatedOffer;
     });
   }
 
@@ -179,6 +262,17 @@ export class OffersService {
       where: { id },
       include: {
         transaction: true,
+        listing: true,
+      },
+    });
+  }
+
+  async updateTransaction(transactionId: string, status: TransactionStatus) {
+    return this.prisma.exchangeTransaction.update({
+      where: { id: transactionId },
+      data: { status },
+      include: {
+        offer: true,
         listing: true,
       },
     });

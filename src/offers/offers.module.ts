@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma.service';
 import { KafkaService } from 'src/kafka/kafka.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
+import { BalanceModule } from '../balance/balance.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AuditModule } from '../audit/audit.module';
     ]),
     NotificationsModule,
     AuditModule,
+    BalanceModule,
   ],
   controllers: [OffersController],
   providers: [OffersService, PrismaService, KafkaService],

@@ -64,6 +64,10 @@ API документация для P2P платформы обмена крип
       • POST /transactions/{id}/confirm - Подтверждение транзакции
       • POST /transactions/{id}/cancel - Отмена транзакции
 
+      Payment:
+      • POST /exchanges/transactions/{transactionId}/verify - Верификация платежа (только для модераторов и админов)
+      • POST /exchanges/transactions/{transactionId}/reject - Отклонение платежа (только для модераторов и админов)
+
       Disputes:
       • POST /disputes - Создание спора
       • GET /disputes - Получение списка споров
@@ -117,6 +121,14 @@ const swaggerCustomCss = `
       .swagger-ui .opblock-tag[data-tag="Transactions"] {
         background-color: #f3e5f5;
         border: 1px solid #9c27b0;
+      }
+      .swagger-ui .opblock-tag[data-tag="Payment"] {
+        background-color: #e1f5fe;
+        border: 1px solid #03a9f4;
+      }
+      .swagger-ui .opblock-tag[data-tag="Payments"] {
+        background-color: #e1f5fe;
+        border: 1px solid #03a9f4;
       }
       .swagger-ui .opblock-tag[data-tag="Disputes"] {
         background-color: #ffebee;
@@ -210,6 +222,7 @@ async function bootstrap() {
     .addTag('Listings', 'Объявления - Управление объявлениями об обмене. Создание, редактирование, поиск и фильтрация объявлений о покупке/продаже криптовалют.')
     .addTag('Offers', 'Предложения - Управление предложениями обмена. Создание, принятие, отклонение и отмена предложений по обмену криптовалют.')
     .addTag('Transactions', 'Транзакции - Управление транзакциями обмена. Отслеживание статуса, подтверждение платежей и управление процессом обмена.')
+    .addTag('Payments', 'Платежи - Управление платежами. Верификация и отклонение платежей.')
     .addTag('Disputes', 'Споры - Система разрешения споров. Создание споров, загрузка доказательств и процесс модерации конфликтных ситуаций.')
     .addTag('Users', 'Пользователи - Управление пользователями. Профили, настройки, верификация и управление правами доступа.')
     .addTag('Balance', 'Баланс - Операции с балансом. Просмотр, пополнение, вывод средств и история транзакций.')

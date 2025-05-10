@@ -244,9 +244,9 @@ export interface UnfreezeExchangerRequest {
 export interface ExchangerStatus {
   exchangerId: string;
   online: boolean;
-  missedOffersCount: number;
   lastActiveAt: string;
   isFrozen: boolean;
+  missedOffersCount: number;
 }
 
 export const EXCHANGE_PACKAGE_NAME = "exchange";

@@ -35,6 +35,7 @@ import {
   ExchangerStatus
 } from '../../../proto/generated/exchange.pb';
 import { Roles, UserRole } from '../decorators/roles.decorator';
+import { Payload } from '@nestjs/microservices';
 
 @Controller()
 export class ExchangeGrpcController {
@@ -83,24 +84,15 @@ export class ExchangeGrpcController {
   }
 
   @GrpcMethod('ExchangeService', 'RespondOffer')
-  async respondOffer(data: RespondOfferRequest): Promise<RespondOfferResponse> {
+  async respondOffer(
+    @Payload() data: RespondOfferRequest,
+  ): Promise<RespondOfferResponse> {
     try {
-      const offer = await this.exchangeService.getOffer(data.offerId);
-      const listing = await this.exchangeService.getListing(offer.listingId);
-      
-      if (data.action === RespondAction.DECLINE) {
-        if (listing.type === ExchangeType.CRYPTO_TO_FIAT) {
-          await this.exchangeService.unfreezeCustomerCrypto(data.exchangerId, offer.amount);
-        }
-        await this.exchangeService.incrementMissedOffers(data.exchangerId);
-      } else {
-        await this.exchangeService.resetMissedOffers(data.exchangerId);
-      }
-      
-      return await this.exchangeService.respondOffer(data);
+      const result = await this.exchangeService.respondOffer(data);
+      return result;
     } catch (error) {
-      this.logger.error(`Failed to respond to offer: ${error.message}`, error.stack);
-      throw new GrpcError(error.message, 'INTERNAL');
+      this.logger.error(`Error responding to offer: ${error.message}`, error.stack);
+      throw error;
     }
   }
 
@@ -187,21 +179,15 @@ export class ExchangeGrpcController {
 
   @GrpcMethod('ExchangeService', 'SetExchangerStatus')
   @Roles(UserRole.EXCHANGER)
-  async setExchangerStatus(data: SetExchangerStatusRequest): Promise<SetExchangerStatusResponse> {
+  async setExchangerStatus(
+    @Payload() data: SetExchangerStatusRequest,
+  ): Promise<SetExchangerStatusResponse> {
     try {
-      const missedOffers = await this.exchangeService.getMissedOffers(data.exchangerId);
-      if (missedOffers >= 5) {
-        await this.exchangeService.freezeExchanger({
-          exchangerId: data.exchangerId,
-          reason: 'Too many missed offers'
-        });
-        throw new GrpcError('Exchanger has been frozen due to too many missed offers', 'PERMISSION_DENIED');
-      }
-
-      return await this.exchangeService.setExchangerStatus(data);
+      const result = await this.exchangeService.setExchangerStatus(data);
+      return result;
     } catch (error) {
-      this.logger.error(`Error in setExchangerStatus: ${error.message}`, error.stack);
-      throw new GrpcError(error.message, 'INTERNAL');
+      this.logger.error(`Error setting exchanger status: ${error.message}`, error.stack);
+      throw error;
     }
   }
 
@@ -226,27 +212,15 @@ export class ExchangeGrpcController {
 
   @GrpcMethod('ExchangeService', 'UpdateMissedOffers')
   @Roles(UserRole.EXCHANGER)
-  async updateMissedOffers(data: UpdateMissedOffersRequest): Promise<ExchangerStatus> {
+  async updateMissedOffers(
+    @Payload() data: UpdateMissedOffersRequest,
+  ): Promise<ExchangerStatus> {
     try {
-      const user = await this.exchangeService.getUser(data.exchangerId);
-      if (user.isFrozen) {
-        throw new GrpcError('Exchanger is frozen', 'PERMISSION_DENIED');
-      }
-
-      const status = await this.exchangeService.updateMissedOffers(data.exchangerId, data.increment);
-      
-      if (status.missedOffersCount >= 5) {
-        await this.exchangeService.freezeExchanger({
-          exchangerId: data.exchangerId,
-          reason: 'Too many missed offers'
-        });
-        status.isFrozen = true;
-      }
-
-      return status;
+      const result = await this.exchangeService.updateMissedOffers(data.exchangerId, data.increment);
+      return result;
     } catch (error) {
-      this.logger.error(`Failed to update missed offers: ${error.message}`, error.stack);
-      throw new GrpcError(error.message, 'INTERNAL');
+      this.logger.error(`Error updating missed offers: ${error.message}`, error.stack);
+      throw error;
     }
   }
 

@@ -124,17 +124,25 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
   @ApiAcceptOffer()
   async accept(@Param('id') id: string): Promise<Offer> {
     const result = await this.offersService.acceptOffer(id);
-    if (!result) {
+    if (!result || !result.transaction || !result.listing) {
       throw new BadRequestException(ErrorMessages.OFFER_ACCEPT_FAILED);
     }
+
     return this.convertExchangeOfferToOffer({
       id: result.id,
       customerId: result.userId,
       listingId: result.listingId,
       amount: result.amount,
-      exchangeType: 'CRYPTO_TO_FIAT',
+      exchangeType: result.listing.type,
       conditions: '',
-      status: result.status
+      status: result.status,
+      cryptocurrency: result.listing.cryptocurrency,
+      fiatCurrency: result.listing.fiatCurrency,
+      cryptoAmount: result.transaction.cryptoAmount,
+      fiatAmount: result.transaction.fiatAmount,
+      holdCreated: result.listing.type === 'FIAT_TO_CRYPTO',
+      transaction: result.transaction,
+      listing: result.listing
     });
   }
 
@@ -179,6 +187,12 @@ export class OffersGatewayController extends BaseGrpcClient implements OnModuleI
       status: exchangeOffer.status as 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      dealType: exchangeOffer.exchangeType,
+      holdCreated: exchangeOffer.holdCreated,
+      cryptocurrency: exchangeOffer.cryptocurrency,
+      fiatCurrency: exchangeOffer.fiatCurrency,
+      cryptoAmount: exchangeOffer.cryptoAmount,
+      fiatAmount: exchangeOffer.fiatAmount
     };
   }
 } 

@@ -22,30 +22,33 @@ datasource db {
 
 
 model User {
-  id                String         @id @default(uuid())
-  email             String         @unique
+  id                String    @id @default(uuid())
+  email             String    @unique
   password          String
-  name              String
-  role              UserRole       @default(CUSTOMER)
-  isExchangerActive Boolean        @default(false)
-  isFrozen          Boolean        @default(false)
+  name              String?
+  role              UserRole  @default(CUSTOMER)
+  isExchangerActive Boolean   @default(false)
+  isFrozen          Boolean   @default(false)
   frozenUntil       DateTime?
-  missedOffersCount Int            @default(0)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  kycStatus         String?   @default("PENDING")
+  kycVerifiedAt     DateTime?
+  isActive          Boolean   @default(true)
+  missedOffersCount Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   // Relationships
+  exchangerSettings ExchangerSettings?
   listings          ExchangeListing[]
   offers            ExchangeOffer[]
+  customerTransactions ExchangeTransaction[] @relation("CustomerTransactions")
   exchangerTransactions ExchangeTransaction[] @relation("ExchangerTransactions")
-  customerTransactions  ExchangeTransaction[] @relation("CustomerTransactions")
   initiatedDisputes   Dispute[]               @relation("DisputeInitiator")
   moderatedDisputes   Dispute[]               @relation("DisputeModerator")
   wonDisputes         Dispute[]               @relation("DisputeWinner")
   reviewsWritten     Review[]                @relation("ReviewAuthor")
   reviewsReceived    Review[]                @relation("ReviewTarget")
   balance           UserBalance?
-  exchangerSettings ExchangerSettings?
   holds             BalanceHold[]
   auditLogs         AuditLog[]
   exchangerStatus   ExchangerStatus?
@@ -55,7 +58,6 @@ model User {
 
   @@index([isExchangerActive])
   @@index([isFrozen])
-
   @@map("users")
 }
 
@@ -128,12 +130,13 @@ model ExchangeOffer {
 
 enum TransactionStatus {
   PENDING
-  APPROVED
-  DECLINED
+  ACCEPTED
+  CRYPTO_RESERVED
   PAYMENT_CONFIRMED
   RECEIPT_CONFIRMED
   FINISHED
   CANCELLED
+  DECLINED
   DISPUTE_OPEN
   DISPUTE_RESOLVED
 }

@@ -230,7 +230,9 @@ export class DisputesGatewayController {
     try {
       const request: GetDisputeCommentsRequest = {
         disputeId: id,
-        userId
+        userId,
+        page: 1,
+        limit: 20
       };
       const response = await this.disputeClient.getDisputeComments(request);
       return response?.comments || [];

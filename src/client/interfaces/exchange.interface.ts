@@ -82,7 +82,17 @@ export interface CreateOfferRequest {
 export interface RespondOfferRequest {
   offerId: string;
   exchangerId: string;
-  action: 'ACCEPT' | 'DECLINE';
+  action: RespondAction;
+}
+
+export interface RespondOfferResponse {
+  success: boolean;
+  message: string;
+}
+
+export enum RespondAction {
+  ACCEPT = 'ACCEPT',
+  DECLINE = 'DECLINE'
 }
 
 export interface UpdateTransactionStatusRequest {
@@ -106,11 +116,6 @@ export interface CreateReviewRequest {
   comment?: string;
 }
 
-export interface SetExchangerStatusRequest {
-  exchangerId: string;
-  online: boolean;
-}
-
 export interface ExchangerStatus {
   exchangerId: string;
   online: boolean;
@@ -119,7 +124,29 @@ export interface ExchangerStatus {
   isFrozen: boolean;
 }
 
+export interface SetExchangerStatusRequest {
+  exchangerId: string;
+  isActive: boolean;
+}
+
+export interface SetExchangerStatusResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface UpdateMissedOffersRequest {
   exchangerId: string;
   increment: boolean;
-} 
+}
+
+// export enum TransactionStatus {
+//   PENDING = 'PENDING',
+//   COMPLETED = 'COMPLETED',
+//   CANCELLED = 'CANCELLED',
+//   DISPUTED = 'DISPUTED'
+// }
+
+// export enum ExchangeType {
+//   CRYPTO_TO_FIAT = 'CRYPTO_TO_FIAT',
+//   FIAT_TO_CRYPTO = 'FIAT_TO_CRYPTO'
+// } 

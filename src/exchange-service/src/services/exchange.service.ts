@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { ExchangeListingFilterDto } from '../dto/exchange.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -6,6 +6,7 @@ import { KafkaService } from 'src/kafka/kafka.service';
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { AuditService } from 'src/audit/audit.service';
 import { BalanceService } from 'src/balance/balance.service';
+import { ExchangerStatus } from '../../../client/interfaces/exchange.interface';
 import {
   CreateListingRequest,
   GetListingsRequest,
@@ -33,10 +34,10 @@ import {
   TransactionStatus as ProtoTransactionStatus,
   RespondAction,
   Role,
-  ExchangerStatus
 } from '../../../proto/generated/exchange.pb';
 import { ExchangeType, TransactionStatus, PaymentMethod, DisputeStatus, UserRole } from '@prisma/client';
 import { NotificationType, OfferStatus } from 'src/client/interfaces/enums';
+import { ReserveService } from './reserve.service';
 
 @Injectable()
 export class ExchangeService {
@@ -48,6 +49,7 @@ export class ExchangeService {
     private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
     private readonly balanceService: BalanceService,
+    private readonly reserveService: ReserveService
   ) {}
 
   async getUser(userId: string) {
@@ -57,8 +59,8 @@ export class ExchangeService {
         id: true,
         isFrozen: true,
         isExchangerActive: true,
-        missedOffersCount: true,
-        updatedAt: true
+        updatedAt: true,
+        missedOffersCount: true
       },
     });
     if (!user) {
@@ -69,9 +71,6 @@ export class ExchangeService {
 
   async getActiveExchanges(userId: string): Promise<GetActiveExchangesResponse> {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setHours(cutoffDate.getHours() - 24);
-
       const transactions = await this.prisma.exchangeTransaction.findMany({
         where: {
           OR: [
@@ -79,16 +78,36 @@ export class ExchangeService {
             { exchangerId: userId },
           ],
           isActive: true,
-          status: {
-            in: [
-              TransactionStatus.PENDING,
-              TransactionStatus.APPROVED,
-              TransactionStatus.DISPUTE_OPEN
-            ]
-          },
-          updatedAt: {
-            gte: cutoffDate
-          }
+          AND: [
+            {
+              OR: [
+                // Show all transactions with FINISHED, CANCELLED, and DECLINED statuses regardless of age
+                {
+                  status: {
+                    in: [
+                      TransactionStatus.FINISHED,
+                      TransactionStatus.CANCELLED,
+                      TransactionStatus.DECLINED
+                    ]
+                  }
+                },
+                // Show all other active statuses
+                {
+                  status: {
+                    in: [
+                      TransactionStatus.PENDING,
+                      TransactionStatus.ACCEPTED,
+                      TransactionStatus.CRYPTO_RESERVED,
+                      TransactionStatus.PAYMENT_CONFIRMED,
+                      TransactionStatus.RECEIPT_CONFIRMED,
+                      TransactionStatus.DISPUTE_OPEN,
+                      TransactionStatus.DISPUTE_RESOLVED
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
         },
         include: {
           listing: true,
@@ -97,15 +116,28 @@ export class ExchangeService {
             select: {
               id: true,
               email: true,
+              name: true,
+              role: true,
+              isExchangerActive: true,
+              isFrozen: true,
+              isActive: true
             },
           },
           exchanger: {
             select: {
               id: true,
               email: true,
+              name: true,
+              role: true,
+              isExchangerActive: true,
+              isFrozen: true,
+              isActive: true
             },
           },
         },
+        orderBy: {
+          updatedAt: 'desc'
+        }
       });
       return { transactions: transactions.map(this.convertToExchangeTransaction) };
     } catch (error) {
@@ -215,7 +247,7 @@ export class ExchangeService {
         throw new ForbiddenException('Only listing owner can respond to offer');
       }
 
-      const status = data.action === RespondAction.ACCEPT ? TransactionStatus.APPROVED : TransactionStatus.DECLINED;
+      const status = data.action === RespondAction.ACCEPT ? TransactionStatus.ACCEPTED : TransactionStatus.CANCELLED;
       
       const updatedOffer = await this.prisma.exchangeOffer.update({
         where: { id: data.offerId },
@@ -227,11 +259,11 @@ export class ExchangeService {
         data: { status },
       });
 
-      const offerStatus = status === TransactionStatus.APPROVED ? OfferStatus.ACCEPTED : OfferStatus.REJECTED;
+      const offerStatus = status === TransactionStatus.ACCEPTED ? OfferStatus.ACCEPTED : OfferStatus.REJECTED;
       return {
         offerId: updatedOffer.id,
         status: this.convertOfferStatusToTransactionStatus(offerStatus),
-        message: status === TransactionStatus.APPROVED ? 'Offer accepted' : 'Offer declined',
+        message: status === TransactionStatus.ACCEPTED ? 'Offer accepted' : 'Offer declined',
       };
     } catch (error) {
       this.logger.error(`Error responding to offer: ${error.message}`, error.stack);
@@ -354,15 +386,13 @@ export class ExchangeService {
     try {
       const user = await this.prisma.user.update({
         where: { id: data.exchangerId },
-        data: {
-          isExchangerActive: data.online,
-        },
+        data: { isExchangerActive: data.online }
       });
 
       return {
         exchangerId: user.id,
         online: user.isExchangerActive,
-        message: `Exchanger status set to ${data.online ? 'online' : 'offline'}`,
+        message: `Exchanger status updated to ${data.online ? 'online' : 'offline'}`
       };
     } catch (error) {
       this.logger.error(`Error setting exchanger status: ${error.message}`, error.stack);
@@ -521,7 +551,7 @@ export class ExchangeService {
     switch (status) {
       case TransactionStatus.PENDING:
         return ProtoTransactionStatus.PENDING;
-      case TransactionStatus.APPROVED:
+      case TransactionStatus.ACCEPTED:
         return ProtoTransactionStatus.ACTIVE;
       case TransactionStatus.PAYMENT_CONFIRMED:
         return ProtoTransactionStatus.PAYMENT_CONFIRMED;
@@ -531,8 +561,6 @@ export class ExchangeService {
         return ProtoTransactionStatus.FINISHED;
       case TransactionStatus.CANCELLED:
         return ProtoTransactionStatus.CANCELLED;
-      case TransactionStatus.DECLINED:
-        return ProtoTransactionStatus.DECLINED;
       case TransactionStatus.DISPUTE_OPEN:
         return ProtoTransactionStatus.DISPUTE_OPEN;
       case TransactionStatus.DISPUTE_RESOLVED:
@@ -547,7 +575,7 @@ export class ExchangeService {
       case ProtoTransactionStatus.PENDING:
         return TransactionStatus.PENDING;
       case ProtoTransactionStatus.ACTIVE:
-        return TransactionStatus.APPROVED;
+        return TransactionStatus.ACCEPTED;
       case ProtoTransactionStatus.PAYMENT_CONFIRMED:
         return TransactionStatus.PAYMENT_CONFIRMED;
       case ProtoTransactionStatus.RECEIPT_CONFIRMED:
@@ -556,8 +584,6 @@ export class ExchangeService {
         return TransactionStatus.FINISHED;
       case ProtoTransactionStatus.CANCELLED:
         return TransactionStatus.CANCELLED;
-      case ProtoTransactionStatus.DECLINED:
-        return TransactionStatus.DECLINED;
       case ProtoTransactionStatus.DISPUTE_OPEN:
         return TransactionStatus.DISPUTE_OPEN;
       case ProtoTransactionStatus.DISPUTE_RESOLVED:
@@ -590,7 +616,7 @@ export class ExchangeService {
     await this.prisma.exchangeTransaction.updateMany({
       where: {
         status: {
-          in: [TransactionStatus.CANCELLED, TransactionStatus.DECLINED, TransactionStatus.FINISHED],
+          in: [TransactionStatus.CANCELLED, TransactionStatus.CANCELLED, TransactionStatus.FINISHED],
         },
         updatedAt: {
           lt: cutoffDate,
@@ -644,24 +670,6 @@ export class ExchangeService {
     if (hold) {
       await this.balanceService.releaseHold(hold.id);
     }
-  }
-
-  async incrementMissedOffers(exchangerId: string) {
-    await this.prisma.user.update({
-      where: { id: exchangerId },
-      data: {
-        missedOffersCount: { increment: 1 }
-      }
-    });
-  }
-
-  async resetMissedOffers(exchangerId: string) {
-    await this.prisma.user.update({
-      where: { id: exchangerId },
-      data: {
-        missedOffersCount: 0
-      }
-    });
   }
 
   async archiveTransaction(transactionId: string) {
@@ -721,14 +729,6 @@ export class ExchangeService {
     if (hold) {
       await this.balanceService.releaseHold(hold.id);
     }
-  }
-
-  async getMissedOffers(exchangerId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: exchangerId },
-      select: { missedOffersCount: true }
-    });
-    return user?.missedOffersCount ?? 0;
   }
 
   async notifyModerators(data: { type: string; exchangerId: string; reason: string }) {
@@ -823,26 +823,66 @@ export class ExchangeService {
 
   async updateMissedOffers(exchangerId: string, increment: boolean): Promise<ExchangerStatus> {
     try {
-      const user = await this.prisma.user.update({
+      const user = await this.prisma.user.findUnique({
         where: { id: exchangerId },
-        data: {
-          missedOffersCount: increment ? { increment: 1 } : { decrement: 1 }
-        },
         select: {
           id: true,
           isExchangerActive: true,
-          missedOffersCount: true,
           updatedAt: true,
-          isFrozen: true
+          isFrozen: true,
+          missedOffersCount: true
         }
       });
 
+      if (!user) {
+        throw new NotFoundException('Exchanger not found');
+      }
+
+      // Обновляем счетчик пропущенных офферов
+      const newMissedOffersCount = increment ? user.missedOffersCount + 1 : 0;
+      
+      // Проверяем, нужно ли заморозить exchanger'а
+      const shouldFreeze = newMissedOffersCount >= 5;
+
+      // Обновляем статус пользователя
+      const updatedUser = await this.prisma.user.update({
+        where: { id: exchangerId },
+        data: {
+          missedOffersCount: newMissedOffersCount,
+          isFrozen: shouldFreeze,
+          frozenUntil: shouldFreeze ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null // Заморозка на 24 часа
+        }
+      });
+
+      // Если exchanger заморожен, деактивируем все его активные листинги
+      if (shouldFreeze) {
+        await this.prisma.exchangeListing.updateMany({
+          where: {
+            userId: exchangerId,
+            isActive: true
+          },
+          data: {
+            isActive: false
+          }
+        });
+
+        // Отправляем уведомление
+        await this.notificationsGateway.notifyUser(
+          exchangerId,
+          NotificationType.EXCHANGER_FROZEN,
+          {
+            message: 'Your account has been frozen due to missing 5 offers in a row',
+            duration: '24 hours'
+          }
+        );
+      }
+
       return {
-        exchangerId: user.id,
-        online: user.isExchangerActive,
-        missedOffersCount: user.missedOffersCount,
-        lastActiveAt: user.updatedAt.toISOString(),
-        isFrozen: user.isFrozen
+        exchangerId: updatedUser.id,
+        online: updatedUser.isExchangerActive,
+        missedOffersCount: updatedUser.missedOffersCount,
+        lastActiveAt: updatedUser.updatedAt.toISOString(),
+        isFrozen: updatedUser.isFrozen
       };
     } catch (error) {
       this.logger.error(`Error updating missed offers: ${error.message}`, error.stack);
@@ -857,9 +897,9 @@ export class ExchangeService {
         select: {
           id: true,
           isExchangerActive: true,
-          missedOffersCount: true,
           updatedAt: true,
-          isFrozen: true
+          isFrozen: true,
+          missedOffersCount: true
         }
       });
 
@@ -870,9 +910,9 @@ export class ExchangeService {
       return {
         exchangerId: user.id,
         online: user.isExchangerActive,
-        missedOffersCount: user.missedOffersCount,
         lastActiveAt: user.updatedAt.toISOString(),
-        isFrozen: user.isFrozen
+        isFrozen: user.isFrozen,
+        missedOffersCount: user.missedOffersCount
       };
     } catch (error) {
       this.logger.error(`Error getting exchanger status: ${error.message}`, error.stack);
@@ -885,15 +925,14 @@ export class ExchangeService {
       const user = await this.prisma.user.update({
         where: { id: exchangerId },
         data: {
-          isFrozen: false,
-          missedOffersCount: 0
+          isFrozen: false
         },
         select: {
           id: true,
           isExchangerActive: true,
-          missedOffersCount: true,
           updatedAt: true,
-          isFrozen: true
+          isFrozen: true,
+          missedOffersCount: true
         }
       });
 
@@ -913,13 +952,80 @@ export class ExchangeService {
       return {
         exchangerId: user.id,
         online: user.isExchangerActive,
-        missedOffersCount: user.missedOffersCount,
         lastActiveAt: user.updatedAt.toISOString(),
-        isFrozen: user.isFrozen
+        isFrozen: user.isFrozen,
+        missedOffersCount: user.missedOffersCount
       };
     } catch (error) {
       this.logger.error(`Error unfreezing exchanger: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  async acceptOffer(transactionId: string) {
+    const transaction = await this.prisma.exchangeTransaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        listing: true
+      }
+    });
+
+    if (!transaction) {
+      throw new BadRequestException('Transaction not found');
+    }
+
+    if (transaction.status !== TransactionStatus.PENDING) {
+      throw new BadRequestException('Transaction is not in pending state');
+    }
+
+    // Для Fiat2Crypto резервируем криптовалюту
+    if (transaction.listing.type === ExchangeType.FIAT_TO_CRYPTO) {
+      await this.reserveService.reserveCryptocurrency(transactionId);
+    } else {
+      // Для других типов просто обновляем статус
+      await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.ACCEPTED,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    return { success: true, message: 'Offer accepted successfully' };
+  }
+
+  async rejectOffer(transactionId: string) {
+    const transaction = await this.prisma.exchangeTransaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        listing: true
+      }
+    });
+
+    if (!transaction) {
+      throw new BadRequestException('Transaction not found');
+    }
+
+    if (transaction.status !== TransactionStatus.PENDING && 
+        transaction.status !== TransactionStatus.CRYPTO_RESERVED) {
+      throw new BadRequestException('Transaction cannot be rejected in current state');
+    }
+
+    // Если была зарезервирована криптовалюта, освобождаем её
+    if (transaction.status === TransactionStatus.CRYPTO_RESERVED) {
+      await this.reserveService.releaseReservation(transactionId);
+    } else {
+      // Иначе просто обновляем статус
+      await this.prisma.exchangeTransaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.CANCELLED,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    return { success: true, message: 'Offer rejected successfully' };
   }
 } 

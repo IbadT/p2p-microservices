@@ -92,18 +92,34 @@ export class DisputesService {
       throw new ForbiddenException('Exchanger cannot create dispute for this transaction');
     }
 
-    // Check if dispute already exists
+    // Check if transaction is in a valid state for dispute
+    const validStatuses = [
+      TransactionStatus.ACCEPTED,
+      TransactionStatus.CRYPTO_RESERVED,
+      TransactionStatus.PAYMENT_CONFIRMED
+    ] as const;
+    
+    if (!validStatuses.includes(transaction.status as typeof validStatuses[number])) {
+      throw new ForbiddenException('Dispute can only be created for transactions that are accepted, have reserved crypto, or have confirmed payment');
+    }
+
+    // Check if dispute already exists (including resolved ones)
     const existingDispute = await this.prisma.dispute.findFirst({
       where: {
         transactionId,
-        status: {
-          not: DisputeStatus.RESOLVED
-        }
+        OR: [
+          { status: DisputeStatus.OPEN },
+          { status: DisputeStatus.RESOLVED }
+        ]
       }
     });
 
     if (existingDispute) {
-      throw new ForbiddenException('Active dispute already exists for this transaction');
+      if (existingDispute.status === DisputeStatus.OPEN) {
+        throw new ForbiddenException('Active dispute already exists for this transaction');
+      } else {
+        throw new ForbiddenException('This transaction already had a resolved dispute');
+      }
     }
 
     // Create dispute
@@ -170,6 +186,35 @@ export class DisputesService {
     return dispute;
   }
 
+  async notifyModerators(disputeId: string, eventType: NotificationType, payload: any) {
+    // Get all moderators
+    const moderators = await this.prisma.user.findMany({
+      where: {
+        role: 'MODERATOR',
+        isActive: true
+      }
+    });
+
+    // Send Kafka event for moderators
+    await this.kafka.sendEvent({
+      type: eventType,
+      payload: {
+        ...payload,
+        disputeId,
+        targetAudience: 'MODERATORS'
+      }
+    });
+
+    // Notify each moderator
+    for (const moderator of moderators) {
+      this.notificationsGateway.notifyUser(
+        moderator.id,
+        eventType,
+        payload
+      );
+    }
+  }
+
   async resolveDispute(
     disputeId: string,
     resolution: string,
@@ -189,6 +234,7 @@ export class DisputesService {
             }
           }
         },
+        chat: true
       },
     });
 
@@ -362,6 +408,26 @@ export class DisputesService {
           cryptocurrency: transaction.cryptocurrency
         });
 
+        // Notify moderators about the resolution
+        await this.notifyModerators(disputeId, NotificationType.DISPUTE_RESOLVED, {
+          transactionId: transaction.id,
+          winnerId,
+          finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
+          resolution,
+          moderatorId,
+          cryptoAmount: transaction.cryptoAmount,
+          cryptocurrency: transaction.cryptocurrency
+        });
+
+        // Add final resolution comment to the chat
+        if (dispute.chat?.id) {
+          await this.chatGrpcClient.addModeratorComment({
+            disputeId,
+            moderatorId,
+            text: `Dispute resolved: ${resolution}. Winner: ${winnerId}`
+          });
+        }
+
         return updatedDispute;
       } catch (error) {
         this.logger.error(`Failed to resolve dispute: ${error.message}`);
@@ -455,20 +521,67 @@ export class DisputesService {
   ): Promise<Comment> {
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
-      include: { transaction: true }
+      include: { 
+        transaction: true,
+        chat: true
+      }
     });
 
     if (!dispute) {
       throw new NotFoundException('Dispute not found');
     }
 
+    // Check if user is a participant or moderator
+    const isParticipant = 
+      userId === dispute.transaction.customerId || 
+      userId === dispute.transaction.exchangerId;
+    
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const isModerator = user?.role === 'MODERATOR';
+
+    if (!isParticipant && !isModerator) {
+      throw new ForbiddenException('Only participants and moderators can add comments');
+    }
+
     const comment = await firstValueFrom(
       this.chatGrpcClient.addModeratorComment({
         disputeId,
         moderatorId: userId,
-        text,
+        text
       })
+    ) as Comment;
+
+    // Notify participants about new comment
+    const notificationData = {
+      disputeId,
+      commentId: comment.id,
+      userId,
+      text: comment.text,
+      isModeratorComment
+    };
+
+    // Notify customer
+    this.notificationsGateway.notifyUser(
+      dispute.transaction.customerId, 
+      NotificationType.DISPUTE_COMMENT_ADDED, 
+      notificationData
     );
+
+    // Notify exchanger
+    this.notificationsGateway.notifyUser(
+      dispute.transaction.exchangerId,
+      NotificationType.DISPUTE_COMMENT_ADDED,
+      notificationData
+    );
+
+    // If it's a moderator comment, notify all moderators
+    if (isModeratorComment) {
+      await this.notifyModerators(
+        disputeId,
+        NotificationType.MODERATOR_COMMENT_ADDED,
+        notificationData
+      );
+    }
 
     return comment;
   }

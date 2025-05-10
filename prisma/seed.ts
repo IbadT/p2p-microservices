@@ -189,7 +189,7 @@ async function createOffersAndTransactions(users, listings) {
         userId: customer1.id,
         listingId: ethUsdListing.id,
         amount: 200,
-        status: TransactionStatus.APPROVED,
+        status: TransactionStatus.ACCEPTED,
       },
       {
         userId: customer2.id,
@@ -201,7 +201,7 @@ async function createOffersAndTransactions(users, listings) {
         userId: customer2.id,
         listingId: btcEurListing.id,
         amount: 100,
-        status: TransactionStatus.APPROVED,
+        status: TransactionStatus.ACCEPTED,
       },
     ],
   });

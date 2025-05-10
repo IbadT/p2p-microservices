@@ -63,8 +63,8 @@ export class TransactionsService {
 
   private validateStatusTransition(currentStatus: TransactionStatus, newStatus: TransactionStatus): void {
     const validTransitions = {
-      [TransactionStatus.PENDING]: [TransactionStatus.APPROVED, TransactionStatus.DECLINED, TransactionStatus.CANCELLED],
-      [TransactionStatus.APPROVED]: [TransactionStatus.PAYMENT_CONFIRMED, TransactionStatus.CANCELLED],
+      [TransactionStatus.PENDING]: [TransactionStatus.ACCEPTED, TransactionStatus.DECLINED, TransactionStatus.CANCELLED],
+      [TransactionStatus.ACCEPTED]: [TransactionStatus.PAYMENT_CONFIRMED, TransactionStatus.CANCELLED],
       [TransactionStatus.PAYMENT_CONFIRMED]: [TransactionStatus.RECEIPT_CONFIRMED, TransactionStatus.DISPUTE_OPEN],
       [TransactionStatus.RECEIPT_CONFIRMED]: [TransactionStatus.FINISHED, TransactionStatus.DISPUTE_OPEN],
       [TransactionStatus.FINISHED]: [],

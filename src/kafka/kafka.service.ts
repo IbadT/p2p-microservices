@@ -165,7 +165,6 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
 
 
-
 // import {
 //   Injectable,
 //   Logger,
@@ -309,3 +308,4 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 //     await this.disconnect();
 //   }
 // }
+

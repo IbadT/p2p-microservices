@@ -33,9 +33,9 @@ export interface CreateDisputeRequest {
 
 export interface ResolveDisputeRequest {
   disputeId: string;
-  moderatorId: string;
   resolution: string;
-  winnerUserId: string;
+  moderatorId: string;
+  winnerId: string;
 }
 
 export interface GetDisputesByUserRequest {
@@ -80,10 +80,15 @@ export interface AddDisputeCommentRequest {
 export interface GetDisputeCommentsRequest {
   disputeId: string;
   userId: string;
+  page: number;
+  limit: number;
 }
 
 export interface GetDisputeCommentsResponse {
   comments: Comment[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface Comment {
@@ -94,6 +99,57 @@ export interface Comment {
   isModerator: boolean;
   createdAt: string;
   user: User | undefined;
+}
+
+export interface ResolveDisputeResponse {
+  disputeId: string;
+  status: string;
+  resolution: string;
+  winnerUserId: string;
+  transactionId: string;
+  finalStatus: string;
+}
+
+export interface GetDisputeBalanceRequest {
+  disputeId: string;
+}
+
+export interface GetDisputeBalanceResponse {
+  cryptoAmount: number;
+  cryptocurrency: string;
+  fiatAmount: number;
+  fiatCurrency: string;
+  customerBalance: BalanceInfo | undefined;
+  exchangerBalance: BalanceInfo | undefined;
+}
+
+export interface BalanceInfo {
+  crypto: { [key: string]: number };
+  fiat: { [key: string]: number };
+}
+
+export interface BalanceInfo_CryptoEntry {
+  key: string;
+  value: number;
+}
+
+export interface BalanceInfo_FiatEntry {
+  key: string;
+  value: number;
+}
+
+export interface AddModeratorCommentRequest {
+  disputeId: string;
+  moderatorId: string;
+  text: string;
+}
+
+export interface AddModeratorCommentResponse {
+  commentId: string;
+  disputeId: string;
+  moderatorId: string;
+  text: string;
+  createdAt: string;
 }
 
 export const DISPUTES_PACKAGE_NAME = "disputes";
@@ -112,6 +168,13 @@ export interface DisputeServiceClient {
   addDisputeComment(request: AddDisputeCommentRequest, metadata?: Metadata): Observable<Comment>;
 
   getDisputeComments(request: GetDisputeCommentsRequest, metadata?: Metadata): Observable<GetDisputeCommentsResponse>;
+
+  getDisputeBalance(request: GetDisputeBalanceRequest, metadata?: Metadata): Observable<GetDisputeBalanceResponse>;
+
+  addModeratorComment(
+    request: AddModeratorCommentRequest,
+    metadata?: Metadata,
+  ): Observable<AddModeratorCommentResponse>;
 }
 
 export interface DisputeServiceController {
@@ -140,6 +203,16 @@ export interface DisputeServiceController {
     request: GetDisputeCommentsRequest,
     metadata?: Metadata,
   ): Promise<GetDisputeCommentsResponse> | Observable<GetDisputeCommentsResponse> | GetDisputeCommentsResponse;
+
+  getDisputeBalance(
+    request: GetDisputeBalanceRequest,
+    metadata?: Metadata,
+  ): Promise<GetDisputeBalanceResponse> | Observable<GetDisputeBalanceResponse> | GetDisputeBalanceResponse;
+
+  addModeratorComment(
+    request: AddModeratorCommentRequest,
+    metadata?: Metadata,
+  ): Promise<AddModeratorCommentResponse> | Observable<AddModeratorCommentResponse> | AddModeratorCommentResponse;
 }
 
 export function DisputeServiceControllerMethods() {
@@ -152,6 +225,8 @@ export function DisputeServiceControllerMethods() {
       "getDisputeChat",
       "addDisputeComment",
       "getDisputeComments",
+      "getDisputeBalance",
+      "addModeratorComment",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
