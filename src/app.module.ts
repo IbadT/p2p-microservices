@@ -16,8 +16,6 @@ import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { PaymentModule } from './payment-service/src/payment.module';
-// import { ExchangeModule } from './exchange-service/src/exchange.module';
-// import { DisputeModule } from './dispute-service/src/dispute.module';
 import { PrismaClient } from '@prisma/client';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
@@ -25,7 +23,7 @@ import type { RedisClientOptions } from 'redis';
 import { ShutdownService } from './shared/services/shutdown.service';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { ClientModule } from './client/client.module';
-import { KafkaService } from './kafka/kafka.service';
+import { KafkaModule } from './kafka/kafka.module';
 
 @Module({
   imports: [
@@ -56,9 +54,8 @@ import { KafkaService } from './kafka/kafka.service';
     NotificationsModule,
     SchedulerModule,
     PaymentModule,
-    // ExchangeModule,
-    // DisputeModule,
     ClientModule,
+    KafkaModule,
   ],
   controllers: [AppController],
   providers: [
@@ -73,7 +70,6 @@ import { KafkaService } from './kafka/kafka.service';
     },
     PrismaService,
     ShutdownService,
-    KafkaService,
   ],
 })
 export class AppModule implements OnModuleDestroy {

@@ -4,7 +4,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaModule } from '../kafka/kafka.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -21,9 +21,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
       },
     ]),
     NotificationsModule,
+    KafkaModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, PrismaService, KafkaService],
+  providers: [UsersService, PrismaService],
   exports: [UsersService],
 })
 export class UsersModule {}

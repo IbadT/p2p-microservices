@@ -3,7 +3,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DisputesController } from './disputes.controller';
 import { DisputesService } from './disputes.service';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaModule } from '../kafka/kafka.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
@@ -15,6 +15,7 @@ import { BalanceModule } from '../balance/balance.module';
 
 @Module({
   imports: [
+    KafkaModule,
     CacheModule.register(),
     ClientsModule.register([
       {
@@ -36,7 +37,6 @@ import { BalanceModule } from '../balance/balance.module';
   providers: [
     DisputesService,
     PrismaService,
-    KafkaService,
     NotificationsGateway,
     AuditService,
   ],

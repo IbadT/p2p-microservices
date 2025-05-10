@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../kafka/kafka.service';
 import { Prisma, TransactionStatus, DisputeStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
@@ -12,6 +11,7 @@ import { Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { Comment } from '../proto/generated/chat.pb';
 import { BalanceService } from '../balance/balance.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 
 @Injectable()
 export class DisputesService {
@@ -19,11 +19,11 @@ export class DisputesService {
 
   constructor(
     private prisma: PrismaService,
-    private kafka: KafkaService,
     private notificationsGateway: NotificationsGateway,
     private auditService: AuditService,
     private chatGrpcClient: ChatGrpcClient,
     private balanceService: BalanceService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -46,9 +46,9 @@ export class DisputesService {
         data: { status: DisputeStatus.RESOLVED }
       });
 
-      await this.kafka.sendEvent({
+      await this.kafkaProducer.sendMessage('disputes', {
         type: NotificationType.DISPUTE_ARCHIVED,
-        payload: { disputeId: dispute.id }
+        data: { disputeId: dispute.id }
       });
 
       this.notificationsGateway.notifyUser(dispute.initiatorId, NotificationType.DISPUTE_ARCHIVED, { 
@@ -145,9 +145,9 @@ export class DisputesService {
     });
 
     // Emit Kafka event
-    await this.kafka.sendEvent({
+    await this.kafkaProducer.sendMessage('disputes', {
       type: NotificationType.DISPUTE_CREATED,
-      payload: { 
+      data: { 
         disputeId: dispute.id,
         transactionId,
         initiatorId,
@@ -196,9 +196,9 @@ export class DisputesService {
     });
 
     // Send Kafka event for moderators
-    await this.kafka.sendEvent({
+    await this.kafkaProducer.sendMessage('moderation', {
       type: eventType,
-      payload: {
+      data: {
         ...payload,
         disputeId,
         targetAudience: 'MODERATORS'
@@ -221,6 +221,8 @@ export class DisputesService {
     moderatorId: string,
     winnerId: string,
   ) {
+    this.logger.log(`Starting dispute resolution for dispute ${disputeId} by moderator ${moderatorId}`);
+
     const dispute = await this.prisma.dispute.findUnique({
       where: { id: disputeId },
       include: {
@@ -239,33 +241,38 @@ export class DisputesService {
     });
 
     if (!dispute) {
+      this.logger.error(`Dispute ${disputeId} not found`);
       throw new NotFoundException('Dispute not found');
     }
 
     if (dispute.status === DisputeStatus.RESOLVED) {
+      this.logger.warn(`Attempt to resolve already resolved dispute ${disputeId}`);
       throw new ForbiddenException('Dispute is already resolved');
     }
 
-    // Проверяем, что транзакция существует и в статусе спора
     if (!dispute.transaction) {
+      this.logger.error(`Transaction not found for dispute ${disputeId}`);
       throw new NotFoundException('Transaction not found');
     }
 
     if (dispute.transaction.status !== TransactionStatus.DISPUTE_OPEN) {
+      this.logger.warn(`Transaction ${dispute.transaction.id} is not in dispute status`);
       throw new ForbiddenException('Transaction is not in dispute status');
     }
 
-    // Проверяем, что победитель является участником транзакции
     const isCustomerWinner = winnerId === dispute.transaction.customerId;
     const isExchangerWinner = winnerId === dispute.transaction.exchangerId;
 
     if (!isCustomerWinner && !isExchangerWinner) {
+      this.logger.warn(`Invalid winner ${winnerId} for dispute ${disputeId}`);
       throw new ForbiddenException('Winner must be either customer or exchanger');
     }
 
-    // Start a transaction to ensure all operations are atomic
-    return await this.prisma.$transaction(async (prisma) => {
-      try {
+    try {
+      // Start a transaction to ensure all operations are atomic
+      return await this.prisma.$transaction(async (prisma) => {
+        this.logger.log(`Updating dispute ${disputeId} status to RESOLVED`);
+        
         // Update dispute status
         const updatedDispute = await prisma.dispute.update({
           where: { id: disputeId },
@@ -282,12 +289,14 @@ export class DisputesService {
 
         // Handle transaction completion and balance updates based on winner
         if (isCustomerWinner) {
-          // If customer wins, return crypto to customer and mark transaction as cancelled
-          // First release the hold
+          this.logger.log(`Processing customer win for dispute ${disputeId}`);
+          
+          // Release any existing holds
           await this.balanceService.releaseHold(transaction.id);
           
-          // Then return crypto to customer if it was held by exchanger
+          // Return crypto to customer if it was held by exchanger
           if (transaction.status === TransactionStatus.DISPUTE_OPEN) {
+            this.logger.log(`Returning ${transaction.cryptoAmount} ${transaction.cryptocurrency} to customer ${transaction.customerId}`);
             await this.balanceService.transfer(
               transaction.exchangerId,
               transaction.customerId,
@@ -323,21 +332,25 @@ export class DisputesService {
           });
 
           // Emit Kafka event for cancellation
-          await this.kafka.sendEvent({
-            type: NotificationType.DISPUTE_RESOLVED,
-            payload: {
+          await this.kafkaProducer.sendMessage('disputes', {
+            type: 'RESOLVED_CANCELLED',
+            data: {
               disputeId,
               transactionId: transaction.id,
               winnerId,
-              finalStatus: 'CANCELLED',
               resolution,
               balanceReturned: true,
               cryptoAmount: transaction.cryptoAmount,
-              cryptocurrency: transaction.cryptocurrency
+              cryptocurrency: transaction.cryptocurrency,
+              customerId: transaction.customerId,
+              exchangerId: transaction.exchangerId
             },
+            timestamp: new Date().toISOString()
           });
         } else {
-          // If exchanger wins, complete transaction and transfer crypto to exchanger
+          this.logger.log(`Processing exchanger win for dispute ${disputeId}`);
+          
+          // Update transaction status
           await prisma.exchangeTransaction.update({
             where: { id: transaction.id },
             data: {
@@ -347,6 +360,7 @@ export class DisputesService {
           });
 
           // Transfer crypto from customer to exchanger
+          this.logger.log(`Transferring ${transaction.cryptoAmount} ${transaction.cryptocurrency} to exchanger ${transaction.exchangerId}`);
           await this.balanceService.transfer(
             transaction.customerId,
             transaction.exchangerId,
@@ -372,23 +386,25 @@ export class DisputesService {
           });
 
           // Emit Kafka event for completion
-          await this.kafka.sendEvent({
-            type: NotificationType.DISPUTE_RESOLVED,
-            payload: {
+          await this.kafkaProducer.sendMessage('disputes', {
+            type: 'RESOLVED_COMPLETED',
+            data: {
               disputeId,
               transactionId: transaction.id,
               winnerId,
-              finalStatus: 'FINISHED',
               resolution,
               balanceTransferred: true,
               cryptoAmount: transaction.cryptoAmount,
-              cryptocurrency: transaction.cryptocurrency
+              cryptocurrency: transaction.cryptocurrency,
+              customerId: transaction.customerId,
+              exchangerId: transaction.exchangerId
             },
+            timestamp: new Date().toISOString()
           });
         }
 
         // Notify both participants about the resolution
-        this.notificationsGateway.notifyUser(transaction.customerId, NotificationType.DISPUTE_RESOLVED, {
+        const notificationData = {
           disputeId,
           transactionId: transaction.id,
           winnerId,
@@ -396,27 +412,28 @@ export class DisputesService {
           resolution,
           cryptoAmount: transaction.cryptoAmount,
           cryptocurrency: transaction.cryptocurrency
-        });
+        };
 
-        this.notificationsGateway.notifyUser(transaction.exchangerId, NotificationType.DISPUTE_RESOLVED, {
-          disputeId,
-          transactionId: transaction.id,
-          winnerId,
-          finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
-          resolution,
-          cryptoAmount: transaction.cryptoAmount,
-          cryptocurrency: transaction.cryptocurrency
-        });
+        // Send notifications to participants
+        await Promise.all([
+          this.notificationsGateway.notifyUser(transaction.customerId, NotificationType.DISPUTE_RESOLVED, notificationData),
+          this.notificationsGateway.notifyUser(transaction.exchangerId, NotificationType.DISPUTE_RESOLVED, notificationData)
+        ]);
 
-        // Notify moderators about the resolution
-        await this.notifyModerators(disputeId, NotificationType.DISPUTE_RESOLVED, {
-          transactionId: transaction.id,
-          winnerId,
-          finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
-          resolution,
-          moderatorId,
-          cryptoAmount: transaction.cryptoAmount,
-          cryptocurrency: transaction.cryptocurrency
+        // Notify moderators
+        await this.kafkaProducer.sendMessage('moderation', {
+          type: 'DISPUTE_RESOLVED',
+          data: {
+            disputeId,
+            transactionId: transaction.id,
+            winnerId,
+            finalStatus: isCustomerWinner ? 'CANCELLED' : 'FINISHED',
+            resolution,
+            moderatorId,
+            cryptoAmount: transaction.cryptoAmount,
+            cryptocurrency: transaction.cryptocurrency
+          },
+          timestamp: new Date().toISOString()
         });
 
         // Add final resolution comment to the chat
@@ -424,16 +441,30 @@ export class DisputesService {
           await this.chatGrpcClient.addModeratorComment({
             disputeId,
             moderatorId,
-            text: `Dispute resolved: ${resolution}. Winner: ${winnerId}`
+            text: `Dispute resolved: ${resolution}. Winner: ${winnerId}. Final status: ${isCustomerWinner ? 'CANCELLED' : 'FINISHED'}`
           });
         }
 
+        this.logger.log(`Successfully resolved dispute ${disputeId}`);
         return updatedDispute;
-      } catch (error) {
-        this.logger.error(`Failed to resolve dispute: ${error.message}`);
-        throw new ForbiddenException(`Failed to resolve dispute: ${error.message}`);
-      }
-    });
+      });
+    } catch (error) {
+      this.logger.error(`Failed to resolve dispute ${disputeId}: ${error.message}`, error.stack);
+      
+      // Emit error event
+      await this.kafkaProducer.sendMessage('disputes', {
+        type: 'RESOLUTION_FAILED',
+        data: {
+          disputeId,
+          error: error.message,
+          moderatorId,
+          winnerId
+        },
+        timestamp: new Date().toISOString()
+      });
+      
+      throw new ForbiddenException(`Failed to resolve dispute: ${error.message}`);
+    }
   }
 
   async getDisputesByUser(userId: string) {
@@ -646,9 +677,9 @@ export class DisputesService {
     );
 
     // Send Kafka event
-    await this.kafka.sendEvent({
+    await this.kafkaProducer.sendMessage('moderation', {
       type: NotificationType.MODERATOR_COMMENT_ADDED,
-      payload: notificationData
+      data: notificationData
     });
   }
 

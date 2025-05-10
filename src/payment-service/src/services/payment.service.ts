@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaProducerService } from '../../../kafka/kafka.producer';
 import { PaymentWebhookDto, PaymentStatus } from '../dto/payment.dto';
 import { NotificationType } from 'src/client/interfaces/enums';
 
@@ -10,7 +10,7 @@ export class PaymentService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kafka: KafkaService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   async handleWebhook(data: PaymentWebhookDto) {
@@ -80,42 +80,46 @@ export class PaymentService {
   }
 
   private async notifyPaymentCompleted(transaction: any) {
-    await this.kafka.sendEvent({
-      type: NotificationType.PAYMENT,
-      payload: {
+    await this.kafkaProducer.sendMessage('payments', {
+      type: 'COMPLETED',
+      data: {
         userId: transaction.exchangerId,
         message: `Payment received for transaction ${transaction.id}`,
         transactionId: transaction.id
-      }
+      },
+      timestamp: new Date().toISOString()
     });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.PAYMENT,
-      payload: {
+    await this.kafkaProducer.sendMessage('payments', {
+      type: 'COMPLETED',
+      data: {
         userId: transaction.customerId,
         message: `Your payment for transaction ${transaction.id} has been confirmed`,
         transactionId: transaction.id
-      }
+      },
+      timestamp: new Date().toISOString()
     });
   }
 
   private async notifyPaymentFailed(transaction: any) {
-    await this.kafka.sendEvent({
-      type: NotificationType.PAYMENT,
-      payload: {
+    await this.kafkaProducer.sendMessage('payments', {
+      type: 'FAILED',
+      data: {
         userId: transaction.exchangerId,
         message: `Payment failed for transaction ${transaction.id}`,
         transactionId: transaction.id
-      }
+      },
+      timestamp: new Date().toISOString()
     });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.PAYMENT,
-      payload: {
+    await this.kafkaProducer.sendMessage('payments', {
+      type: 'FAILED',
+      data: {
         userId: transaction.customerId,
         message: `Your payment for transaction ${transaction.id} has failed`,
         transactionId: transaction.id
-      }
+      },
+      timestamp: new Date().toISOString()
     });
   }
 

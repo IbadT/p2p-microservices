@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 // import { PrismaService } from '../shared/prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 import { PrismaService } from 'src/prisma.service';
 import { UserRole } from '@prisma/client';
 import { NotificationType } from '../client/interfaces/enums';
@@ -13,7 +13,7 @@ export class UsersService {
 
   constructor(
     private prisma: PrismaService,
-    private kafka: KafkaService,
+    private readonly kafkaProducer: KafkaProducerService,
     private notificationsGateway: NotificationsGateway,
   ) {}
 
@@ -26,26 +26,32 @@ export class UsersService {
     role?: UserRole;
     isExchanger?: boolean;
   }) {
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        password: data.password,
-        name: `${data.firstName} ${data.lastName}`,
-        role: data.role || UserRole.CUSTOMER,
-        isExchangerActive: data.isExchanger || false,
-      },
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email: data.email,
+          password: data.password,
+          name: `${data.firstName} ${data.lastName}`,
+          role: data.role || UserRole.CUSTOMER,
+          isExchangerActive: data.isExchanger || false,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.SYSTEM,
-      payload: { userId: user.id }
-    });
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'CREATE',
+        data: user,
+        timestamp: new Date().toISOString()
+      });
 
-    this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
-      message: 'Welcome to our platform!'
-    });
+      await this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
+        message: 'Welcome to our platform!'
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to create user: ${error.message}`);
+      throw error;
+    }
   }
 
   async updateUser(data: {
@@ -54,56 +60,79 @@ export class UsersService {
     password?: string;
     role?: UserRole;
   }) {
-    const user = await this.prisma.user.update({
-      where: { id: data.userId },
-      data: {
-        email: data.email,
-        password: data.password,
-        role: data.role,
-      },
-    });
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: data.userId },
+        data: {
+          email: data.email,
+          password: data.password,
+          role: data.role,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.SYSTEM,
-      payload: { userId: user.id }
-    });
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'UPDATE',
+        data: user,
+        timestamp: new Date().toISOString()
+      });
 
-    this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
-      message: 'Your profile has been updated'
-    });
+      await this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
+        message: 'Your profile has been updated'
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to update user ${data.userId}: ${error.message}`);
+      throw error;
+    }
   }
 
   async getUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'GET',
+        data: { id: userId },
+        timestamp: new Date().toISOString()
+      });
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to get user ${userId}: ${error.message}`);
+      throw error;
     }
-
-    return user;
   }
 
   async setExchangerStatus(data: {
     exchangerId: string;
     online: boolean;
   }) {
-    const user = await this.prisma.user.update({
-      where: { id: data.exchangerId },
-      data: {
-        isExchangerActive: data.online,
-      },
-    });
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: data.exchangerId },
+        data: {
+          isExchangerActive: data.online,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.EXCHANGER_STATUS_CHECKED,
-      payload: { exchangerId: user.id, online: data.online }
-    });
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'UPDATE',
+        data: user,
+        timestamp: new Date().toISOString()
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to update exchanger status for ${data.exchangerId}: ${error.message}`);
+      throw error;
+    }
   }
 
   async freezeUser(data: {
@@ -111,81 +140,135 @@ export class UsersService {
     reason: string;
     duration?: number;
   }) {
-    const user = await this.prisma.user.update({
-      where: { id: data.userId },
-      data: {
-        isFrozen: true,
-        frozenUntil: data.duration ? new Date(Date.now() + data.duration) : null,
-      },
-    });
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: data.userId },
+        data: {
+          isFrozen: true,
+          frozenUntil: data.duration ? new Date(Date.now() + data.duration) : null,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.EXCHANGER_STATUS_FROZEN,
-      payload: { userId: user.id, reason: data.reason }
-    });
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'UPDATE',
+        data: user,
+        timestamp: new Date().toISOString()
+      });
 
-    this.notificationsGateway.notifyUser(user.id, NotificationType.SECURITY, {
-      message: `Your account has been frozen: ${data.reason}`
-    });
+      await this.notificationsGateway.notifyUser(user.id, NotificationType.SECURITY, {
+        message: `Your account has been frozen: ${data.reason}`
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to freeze user ${data.userId}: ${error.message}`);
+      throw error;
+    }
   }
 
   async unfreezeUser(userId: string) {
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        isFrozen: false,
-        frozenUntil: null,
-      },
-    });
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          isFrozen: false,
+          frozenUntil: null,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.SYSTEM,
-      payload: { userId: user.id }
-    });
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'UPDATE',
+        data: user,
+        timestamp: new Date().toISOString()
+      });
 
-    this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
-      message: 'Your account has been unfrozen'
-    });
+      await this.notificationsGateway.notifyUser(user.id, NotificationType.SYSTEM, {
+        message: 'Your account has been unfrozen'
+      });
 
-    return user;
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to unfreeze user ${userId}: ${error.message}`);
+      throw error;
+    }
   }
 
   async getUserById(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id },
+      });
 
-    if (!user) {
-      return null;
+      if (!user) {
+        return null;
+      }
+
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'GET',
+        data: { id },
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isExchangerActive: user.isExchangerActive,
+        isFrozen: user.isFrozen,
+        frozenUntil: user.frozenUntil,
+        missedOffersCount: user.missedOffersCount,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get user by id ${id}: ${error.message}`);
+      throw error;
     }
-
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      isExchangerActive: user.isExchangerActive,
-      isFrozen: user.isFrozen,
-      frozenUntil: user.frozenUntil,
-      missedOffersCount: user.missedOffersCount,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
   }
 
   async findAll() {
-    const users = await this.prisma.user.findMany();
-    return users.map(user => ({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      isExchangerActive: user.isExchangerActive,
-      isFrozen: user.isFrozen,
-      frozenUntil: user.frozenUntil,
-      missedOffersCount: user.missedOffersCount,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    }));
+    try {
+      const users = await this.prisma.user.findMany();
+
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'LIST',
+        data: { count: users.length },
+        timestamp: new Date().toISOString()
+      });
+
+      return users.map(user => ({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isExchangerActive: user.isExchangerActive,
+        isFrozen: user.isFrozen,
+        frozenUntil: user.frozenUntil,
+        missedOffersCount: user.missedOffersCount,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }));
+    } catch (error) {
+      this.logger.error(`Failed to fetch users: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async remove(id: string) {
+    try {
+      const user = await this.prisma.user.delete({
+        where: { id }
+      });
+
+      await this.kafkaProducer.sendMessage('users', {
+        type: 'DELETE',
+        data: { id },
+        timestamp: new Date().toISOString()
+      });
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to delete user ${id}: ${error.message}`);
+      throw error;
+    }
   }
 }

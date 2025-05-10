@@ -38,6 +38,7 @@ import {
 import { ExchangeType, TransactionStatus, PaymentMethod, DisputeStatus, UserRole } from '@prisma/client';
 import { NotificationType, OfferStatus } from 'src/client/interfaces/enums';
 import { ReserveService } from './reserve.service';
+import { KafkaProducerService } from '../../../kafka/kafka.producer';
 
 @Injectable()
 export class ExchangeService {
@@ -49,7 +50,8 @@ export class ExchangeService {
     private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
     private readonly balanceService: BalanceService,
-    private readonly reserveService: ReserveService
+    private readonly reserveService: ReserveService,
+    private readonly kafkaProducer: KafkaProducerService
   ) {}
 
   async getUser(userId: string) {
@@ -732,9 +734,10 @@ export class ExchangeService {
   }
 
   async notifyModerators(data: { type: string; exchangerId: string; reason: string }) {
-    await this.kafka.sendEvent({
-      type: NotificationType.SECURITY,
-      payload: data
+    await this.kafkaProducer.sendMessage('exchanges', {
+      type: 'SECURITY',
+      data,
+      timestamp: new Date().toISOString()
     });
   }
 

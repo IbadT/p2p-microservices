@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { KafkaService } from '../kafka/kafka.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { ChatType, ChatParticipantRole, UserRole, Comment as PrismaComment, Message as PrismaMessage } from '@prisma/client';
 import { NotificationType } from '../client/interfaces/enums';
@@ -26,9 +26,9 @@ export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
   constructor(
-    private prisma: PrismaService,
-    private kafka: KafkaService,
-    private notificationsGateway: NotificationsGateway,
+    private readonly prisma: PrismaService,
+    private readonly kafkaProducer: KafkaProducerService,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   /**
@@ -88,9 +88,13 @@ export class ChatService {
 
     // Notify participants about new chat
     for (const participant of chat.participants) {
-      await this.kafka.sendEvent({
-        type: NotificationType.CHAT_CREATED,
-        payload: { chatId: chat.id, userId: participant.userId }
+      await this.kafkaProducer.sendMessage('chat', {
+        type: 'CHAT_CREATED',
+        data: {
+          chatId: chat.id,
+          userId: participant.userId
+        },
+        timestamp: new Date().toISOString()
       });
 
       this.notificationsGateway.notifyUser(participant.userId, NotificationType.CHAT_CREATED, {
@@ -150,9 +154,13 @@ export class ChatService {
     });
 
     // Notify moderator about being added to chat
-    await this.kafka.sendEvent({
-      type: NotificationType.MODERATOR_ADDED_TO_CHAT,
-      payload: { chatId, moderatorId }
+    await this.kafkaProducer.sendMessage('chat', {
+      type: 'MODERATOR_ADDED_TO_CHAT',
+      data: {
+        chatId,
+        moderatorId
+      },
+      timestamp: new Date().toISOString()
     });
 
     this.notificationsGateway.notifyUser(moderatorId, NotificationType.MODERATOR_ADDED_TO_CHAT, {
@@ -172,49 +180,60 @@ export class ChatService {
    * @throws ForbiddenException if user is not a participant
    */
   async sendMessage(chatId: string, senderId: string, content: string) {
-    const chat = await this.prisma.chat.findUnique({
-      where: { id: chatId },
-      include: {
-        participants: true,
-      },
-    });
+    try {
+      const chat = await this.prisma.chat.findUnique({
+        where: { id: chatId },
+        include: {
+          participants: true,
+        },
+      });
 
-    if (!chat) {
-      throw new NotFoundException('Chat not found');
-    }
+      if (!chat) {
+        throw new NotFoundException('Chat not found');
+      }
 
-    const participant = chat.participants.find(p => p.userId === senderId);
-    if (!participant) {
-      throw new ForbiddenException('User is not a participant in this chat');
-    }
+      const participant = chat.participants.find(p => p.userId === senderId);
+      if (!participant) {
+        throw new ForbiddenException('User is not a participant in this chat');
+      }
 
-    const message = await this.prisma.message.create({
-      data: {
-        content,
-        senderId,
-        chatId,
-      },
-      include: {
-        sender: true,
-      },
-    });
+      const message = await this.prisma.message.create({
+        data: {
+          content,
+          senderId,
+          chatId,
+        },
+        include: {
+          sender: true,
+        },
+      });
 
-    // Notify all participants about new message
-    for (const participant of chat.participants) {
-      if (participant.userId !== senderId) {
-        await this.kafka.sendEvent({
-          type: NotificationType.NEW_MESSAGE,
-          payload: { chatId, messageId: message.id, userId: participant.userId }
-        });
-
-        this.notificationsGateway.notifyUser(participant.userId, NotificationType.NEW_MESSAGE, {
+      await this.kafkaProducer.sendMessage('chat', {
+        type: 'NEW_MESSAGE',
+        data: {
           chatId,
           messageId: message.id,
-        });
-      }
-    }
+          senderId,
+          content
+        },
+        timestamp: new Date().toISOString()
+      });
 
-    return message;
+      // Notify all participants about new message
+      for (const participant of chat.participants) {
+        if (participant.userId !== senderId) {
+          this.notificationsGateway.notifyUser(participant.userId, NotificationType.NEW_MESSAGE, {
+            chatId,
+            messageId: message.id,
+          });
+        }
+      }
+
+      return message;
+    } catch (error) {
+      this.logger.error(`Failed to send message in chat ${chatId}: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
@@ -405,9 +424,13 @@ export class ChatService {
       ? dispute.transaction.exchangerId 
       : dispute.transaction.customerId;
 
-    await this.kafka.sendEvent({
-      type: NotificationType.DISPUTE_COMMENT_ADDED,
-      payload: { disputeId, commentId: comment.id }
+    await this.kafkaProducer.sendMessage('chat', {
+      type: 'DISPUTE_COMMENT_ADDED',
+      data: {
+        disputeId,
+        commentId: comment.id
+      },
+      timestamp: new Date().toISOString()
     });
 
     this.notificationsGateway.notifyUser(otherParticipantId, NotificationType.DISPUTE_COMMENT_ADDED, {
@@ -554,9 +577,14 @@ export class ChatService {
     const participants = [dispute.transaction.customerId, dispute.transaction.exchangerId];
     for (const participantId of participants) {
       if (participantId !== moderatorId) {
-        await this.kafka.sendEvent({
-          type: NotificationType.MODERATOR_COMMENT_ADDED,
-          payload: { disputeId, commentId: comment.id, userId: participantId }
+        await this.kafkaProducer.sendMessage('chat', {
+          type: 'MODERATOR_COMMENT_ADDED',
+          data: {
+            disputeId,
+            commentId: comment.id,
+            userId: participantId
+          },
+          timestamp: new Date().toISOString()
         });
 
         this.notificationsGateway.notifyUser(participantId, NotificationType.MODERATOR_COMMENT_ADDED, {

@@ -7,7 +7,7 @@ import { PaymentController } from './controllers/payment.controller';
 import { PaymentGrpcController } from './grpc/payment.grpc.controller';
 import { PaymentService } from './services/payment.service';
 import { PrismaService } from 'src/prisma.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaModule } from 'src/kafka/kafka.module';
 // import { PaymentVerificationService } from './services/payment-verification.service';
 import { PaymentWebhookService } from './services/payment-webhook.service';
 import paymentConfig from './config/payment.config';
@@ -15,6 +15,7 @@ import { PaymentVerificationService } from 'src/exchange-service/src/services/pa
 
 @Module({
   imports: [
+    KafkaModule,
     ConfigModule.forRoot({
       load: [paymentConfig],
       isGlobal: true,
@@ -36,7 +37,6 @@ import { PaymentVerificationService } from 'src/exchange-service/src/services/pa
   providers: [
     PaymentService,
     PrismaService,
-    KafkaService,
     PaymentVerificationService,
     PaymentWebhookService
   ],

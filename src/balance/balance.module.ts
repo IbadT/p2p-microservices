@@ -3,11 +3,11 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BalanceController } from './balance.controller';
 import { BalanceService } from './balance.service';
 import { PrismaService } from '../prisma.service';
-// import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaModule } from '../kafka/kafka.module';
 
 @Module({
   imports: [
+    KafkaModule,
     ClientsModule.register([
       {
         name: 'BALANCE_PACKAGE',
@@ -20,7 +20,7 @@ import { KafkaService } from 'src/kafka/kafka.service';
     ]),
   ],
   controllers: [BalanceController],
-  providers: [BalanceService, PrismaService, KafkaService],
+  providers: [BalanceService, PrismaService],
   exports: [BalanceService],
 })
 export class BalanceModule {}

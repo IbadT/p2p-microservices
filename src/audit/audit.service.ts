@@ -1,15 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 // import { PrismaService } from '../shared/prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 import { PrismaService } from 'src/prisma.service';
 import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
+
   constructor(
-    private prisma: PrismaService,
-    private kafka: KafkaService,
+    private readonly prisma: PrismaService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   async createAuditLog(data: {
@@ -19,29 +21,35 @@ export class AuditService {
     entityId: string;
     metadata?: Record<string, any>;
   }) {
-    const auditLog = await this.prisma.auditLog.create({
-      data: {
-        userId: data.userId,
-        action: data.action,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        metadata: data.metadata,
-      },
-    });
+    try {
+      const auditLog = await this.prisma.auditLog.create({
+        data: {
+          userId: data.userId,
+          action: data.action,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          metadata: data.metadata,
+        },
+      });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.AUDIT_LOG_CREATED,
-      payload: {
-        auditLogId: auditLog.id,
-        userId: data.userId,
-        action: data.action,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        metadata: data.metadata,
-      }
-    });
+      await this.kafkaProducer.sendMessage('audit', {
+        type: 'CREATE',
+        data: {
+          auditLogId: auditLog.id,
+          userId: data.userId,
+          action: data.action,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          metadata: data.metadata,
+        },
+        timestamp: new Date().toISOString()
+      });
 
-    return auditLog;
+      return auditLog;
+    } catch (error) {
+      this.logger.error(`Failed to create audit log: ${error.message}`);
+      throw error;
+    }
   }
 
   async getAuditLogs(filters: {

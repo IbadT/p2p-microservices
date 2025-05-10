@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 // import { PrismaService } from '../shared/prisma.service';
 // import { KafkaService } from '../shared/kafka.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 import { PrismaService } from 'src/prisma.service';
 import { Prisma } from '@prisma/client';
 import { CryptoBalance, HoldAmount, UserBalanceData } from '../types/balance.types';
@@ -9,9 +9,11 @@ import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class BalanceService {
+  private readonly logger = new Logger(BalanceService.name);
+
   constructor(
-    private prisma: PrismaService,
-    private kafka: KafkaService
+    private readonly prisma: PrismaService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   async getBalance(userId: string) {
@@ -34,25 +36,31 @@ export class BalanceService {
   }
 
   async updateBalance(userId: string, data: Prisma.UserBalanceUpdateInput) {
-    const updatedBalance = await this.prisma.userBalance.update({
-      where: { userId },
-      data,
-    });
-
-    if (data.cryptoBalance && typeof data.cryptoBalance === 'object') {
-      const cryptoBalance = data.cryptoBalance as CryptoBalance;
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_UPDATED,
-        payload: {
-          userId,
-          cryptocurrency: cryptoBalance.cryptocurrency,
-          newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptoBalance.cryptocurrency],
-          change: cryptoBalance.amount,
-        }
+    try {
+      const updatedBalance = await this.prisma.userBalance.update({
+        where: { userId },
+        data,
       });
-    }
 
-    return updatedBalance;
+      if (data.cryptoBalance && typeof data.cryptoBalance === 'object') {
+        const cryptoBalance = data.cryptoBalance as CryptoBalance;
+        await this.kafkaProducer.sendMessage('balance', {
+          type: 'UPDATE',
+          data: {
+            userId,
+            cryptocurrency: cryptoBalance.cryptocurrency,
+            newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptoBalance.cryptocurrency],
+            change: cryptoBalance.amount,
+          },
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return updatedBalance;
+    } catch (error) {
+      this.logger.error(`Failed to update balance for user ${userId}: ${error.message}`);
+      throw error;
+    }
   }
 
   async createTransaction(data: Prisma.ExchangeTransactionCreateInput) {
@@ -116,14 +124,15 @@ export class BalanceService {
       });
 
       // Emit Kafka event
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_HOLD_CREATED,
-        payload: {
+      await this.kafkaProducer.sendMessage('balance', {
+        type: 'HOLD_CREATED',
+        data: {
           userId,
           amount,
           currency: cryptocurrency,
           holdId: hold.id
-        }
+        },
+        timestamp: new Date().toISOString()
       });
       return hold;
     })
@@ -161,14 +170,15 @@ export class BalanceService {
       });
 
       // Emit Kafka event
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_HOLD_RELEASED,
-        payload: {
+      await this.kafkaProducer.sendMessage('balance', {
+        type: 'HOLD_RELEASED',
+        data: {
           userId: hold.userId,
           amount: hold.amount,
           currency: hold.cryptocurrency,
           holdId: hold.id
-        }
+        },
+        timestamp: new Date().toISOString()
       });
     });
   }
@@ -221,14 +231,15 @@ export class BalanceService {
       ]);
 
       // Emit Kafka event
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_TRANSFER_COMPLETED,
-        payload: {
+      await this.kafkaProducer.sendMessage('balance', {
+        type: 'TRANSFER_COMPLETED',
+        data: {
           fromUserId,
           toUserId,
           amount,
           currency: cryptocurrency,
-        }
+        },
+        timestamp: new Date().toISOString()
       });
     });
   }
@@ -249,14 +260,15 @@ export class BalanceService {
       },
     });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.BALANCE_UPDATED,
-      payload: {
+    await this.kafkaProducer.sendMessage('balance', {
+      type: 'UPDATED',
+      data: {
         userId,
         cryptocurrency,
         newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
         change: amount,
-      }
+      },
+      timestamp: new Date().toISOString()
     });
 
     return updatedBalance;
@@ -284,14 +296,15 @@ export class BalanceService {
         },
       });
 
-      await this.kafka.sendEvent({
-        type: NotificationType.BALANCE_UPDATED,
-        payload: {
+      await this.kafkaProducer.sendMessage('balance', {
+        type: 'UPDATED',
+        data: {
           userId,
           cryptocurrency,
           newBalance: (updatedBalance.cryptoBalance as CryptoBalance)[cryptocurrency],
           change: amount,
-        }
+        },
+        timestamp: new Date().toISOString()
       });
 
       return updatedBalance;
@@ -326,9 +339,10 @@ export class BalanceService {
       }
     });
 
-    await this.kafka.sendEvent({
-      type: NotificationType.BALANCE_TRANSFER,
-      payload: { fromUserId, toUserId, amount, cryptocurrency }
+    await this.kafkaProducer.sendMessage('balance', {
+      type: 'TRANSFER',
+      data: { fromUserId, toUserId, amount, cryptocurrency },
+      timestamp: new Date().toISOString()
     });
 
     return { fromUserId, toUserId, amount, cryptocurrency };

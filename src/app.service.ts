@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { KafkaService } from './kafka/kafka.service';
+import { KafkaProducerService } from './kafka/kafka.producer';
 import { NotificationType } from './client/interfaces/enums';
 
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
 
-  constructor(private readonly kafkaService: KafkaService) {}
+  constructor(private readonly kafkaProducer: KafkaProducerService) {}
 
   getHello(): string {
     return 'Hello World!';
@@ -15,9 +15,9 @@ export class AppService {
   async checkHealth() {
     try {
       // Try to send a test message to Kafka
-      await this.kafkaService.sendEvent({
+      await this.kafkaProducer.sendMessage('health', {
         type: NotificationType.HEALTH_CHECK,
-        payload: {
+        data: {
           timestamp: new Date().toISOString(),
           service: 'p2p-service'
         }
