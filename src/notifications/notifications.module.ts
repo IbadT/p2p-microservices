@@ -7,7 +7,13 @@ import { KafkaModule } from '../kafka/kafka.module';
 @Module({
   imports: [KafkaModule],
   controllers: [NotificationsController],
-  providers: [NotificationsService, NotificationsGateway],
-  exports: [NotificationsGateway],
+  providers: [
+    NotificationsService,
+    NotificationsGateway
+  ],
+  exports: [
+    NotificationsService,
+    NotificationsGateway
+  ],
 })
 export class NotificationsModule {}

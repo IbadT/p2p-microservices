@@ -82,6 +82,8 @@ export enum NotificationType {
   
   // Payment related
   PAYMENT = 'PAYMENT',
+  PAYMENT_VERIFIED = 'payment.verified',
+  PAYMENT_REJECTED = 'payment.rejected',
   
   // New notification
   EXCHANGER_FROZEN = 'EXCHANGER_FROZEN'

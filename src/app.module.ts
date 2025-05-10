@@ -15,7 +15,8 @@ import { BalanceModule } from './balance/balance.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
-import { PaymentModule } from './payment-service/src/payment.module';
+import { PaymentModule } from './exchange-service/src/payment.module';
+import { ExchangeModule } from './exchange-service/src/exchange.module';
 import { PrismaClient } from '@prisma/client';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
@@ -54,6 +55,7 @@ import { KafkaModule } from './kafka/kafka.module';
     NotificationsModule,
     SchedulerModule,
     PaymentModule,
+    ExchangeModule,
     ClientModule,
     KafkaModule,
   ],

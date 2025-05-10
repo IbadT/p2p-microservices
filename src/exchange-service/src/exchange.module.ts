@@ -1,44 +1,36 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ExchangeController } from './controllers/exchange.controller';
-import { ExchangeGrpcController } from './grpc/exchange.grpc.controller';
-import { PaymentVerificationController } from './controllers/payment-verification.controller';
 import { ExchangeService } from './services/exchange.service';
-import { PaymentVerificationService } from './services/payment-verification.service';
+import { ExchangeController } from './controllers/exchange.controller';
 import { PrismaService } from 'src/prisma.service';
-import { KafkaService } from 'src/kafka/kafka.service';
+import { KafkaModule } from 'src/kafka/kafka.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
+import { PaymentModule } from './payment.module';
 import { ReserveService } from './services/reserve.service';
-import { NotificationsGateway } from 'src/notifications/notifications.gateway';
-import { AuditService } from 'src/audit/audit.service';
-import { BalanceService } from 'src/balance/balance.service';
-import { APP_GUARD } from '@nestjs/core';
-import { RolesGuard } from './guards/roles.guard';
+import { KafkaService } from 'src/kafka/kafka.service';
+import { AuditModule } from 'src/audit/audit.module';
+import { BalanceModule } from 'src/balance/balance.module';
+import { ConfigModule } from '@nestjs/config';
+import { KafkaProducerService } from 'src/kafka/kafka.producer';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    ConfigModule,
+    KafkaModule,
+    NotificationsModule,
+    PaymentModule,
+    AuditModule,
+    BalanceModule,
+    CacheModule.register()
   ],
-  controllers: [
-    ExchangeController,
-    ExchangeGrpcController,
-    PaymentVerificationController
-  ],
+  controllers: [ExchangeController],
   providers: [
     ExchangeService,
-    PaymentVerificationService,
     PrismaService,
-    KafkaService,
     ReserveService,
-    NotificationsGateway,
-    AuditService,
-    BalanceService,
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
+    KafkaService,
+    KafkaProducerService
   ],
-  exports: [ExchangeService, PaymentVerificationService],
+  exports: [ExchangeService]
 })
 export class ExchangeModule {} 

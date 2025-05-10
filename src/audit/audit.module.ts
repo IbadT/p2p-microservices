@@ -6,6 +6,7 @@ import { AuditService } from './audit.service';
 // import { KafkaService } from '../shared/kafka.service';
 import { PrismaService } from 'src/prisma.service';
 import { KafkaModule } from '../kafka/kafka.module';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { KafkaModule } from '../kafka/kafka.module';
     ]),
   ],
   controllers: [AuditController],
-  providers: [AuditService, PrismaService],
+  providers: [AuditService, PrismaService, KafkaProducerService],
   exports: [AuditService],
 })
 export class AuditModule {}

@@ -178,6 +178,10 @@ message ConfirmPaymentRequest {
   string transactionId = 1;
   string exchangerId = 2;
   string paymentReference = 3;
+  string bankId = 4;
+  string bankTransactionId = 5;
+  string screenshotUrl = 6;
+  string additionalNotes = 7;
 }
 
 message ConfirmPaymentResponse {

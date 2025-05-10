@@ -175,6 +175,10 @@ export interface ConfirmPaymentRequest {
   transactionId: string;
   exchangerId: string;
   paymentReference: string;
+  bankId: string;
+  bankTransactionId: string;
+  screenshotUrl: string;
+  additionalNotes: string;
 }
 
 export interface ConfirmPaymentResponse {

@@ -39,6 +39,8 @@ import { ExchangeType, TransactionStatus, PaymentMethod, DisputeStatus, UserRole
 import { NotificationType, OfferStatus } from 'src/client/interfaces/enums';
 import { ReserveService } from './reserve.service';
 import { KafkaProducerService } from '../../../kafka/kafka.producer';
+import { ConfigService } from '@nestjs/config';
+import { PaymentVerificationService } from 'src/exchange-service/src/services/payment-verification.service';
 
 @Injectable()
 export class ExchangeService {
@@ -46,12 +48,14 @@ export class ExchangeService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
     private readonly kafka: KafkaService,
     private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
     private readonly balanceService: BalanceService,
     private readonly reserveService: ReserveService,
-    private readonly kafkaProducer: KafkaProducerService
+    private readonly kafkaProducer: KafkaProducerService,
+    private readonly paymentVerificationService: PaymentVerificationService
   ) {}
 
   async getUser(userId: string) {
@@ -293,6 +297,9 @@ export class ExchangeService {
     try {
       const transaction = await this.prisma.exchangeTransaction.findUnique({
         where: { id: data.transactionId },
+        include: {
+          listing: true
+        }
       });
 
       if (!transaction) {
@@ -303,18 +310,38 @@ export class ExchangeService {
         throw new ForbiddenException('Only exchanger can confirm payment');
       }
 
-      const updatedTransaction = await this.prisma.exchangeTransaction.update({
-        where: { id: data.transactionId },
-        data: {
-          status: TransactionStatus.PAYMENT_CONFIRMED,
-          paymentProof: data.paymentReference,
-        },
-      });
+      // Проверяем банковскую транзакцию, если предоставлен ID
+      if (data.bankId && data.bankTransactionId) {
+        await this.paymentVerificationService.verifyPayment(
+          data.transactionId,
+          data.exchangerId,
+          {
+            bankId: data.bankId,
+            bankTransactionId: data.bankTransactionId,
+            screenshotUrl: data.screenshotUrl,
+            additionalNotes: data.additionalNotes
+          }
+        );
+      } else {
+        // Если нет банковской транзакции, требуем скриншот
+        if (!data.screenshotUrl) {
+          throw new BadRequestException('Either bank transaction ID or payment screenshot is required');
+        }
+
+        await this.paymentVerificationService.verifyPayment(
+          data.transactionId,
+          data.exchangerId,
+          {
+            screenshotUrl: data.screenshotUrl,
+            additionalNotes: data.additionalNotes
+          }
+        );
+      }
 
       return {
-        transactionId: updatedTransaction.id,
+        transactionId: transaction.id,
         status: ProtoTransactionStatus.PAYMENT_CONFIRMED,
-        message: 'Payment confirmed',
+        message: 'Payment confirmed and verified'
       };
     } catch (error) {
       this.logger.error(`Error confirming payment: ${error.message}`, error.stack);

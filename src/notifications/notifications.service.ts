@@ -2,12 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { KafkaProducerService } from '../kafka/kafka.producer';
+import { NotificationsGateway } from './notifications.gateway';
+import { NotificationType } from '../client/interfaces/enums';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly kafkaProducer: KafkaProducerService) {}
+  constructor(
+    private readonly kafkaProducer: KafkaProducerService,
+    private readonly notificationsGateway: NotificationsGateway
+  ) {}
 
   async create(createNotificationDto: CreateNotificationDto) {
     try {
@@ -77,5 +82,9 @@ export class NotificationsService {
       this.logger.error(`Failed to send notification deletion to Kafka: ${error.message}`);
       throw error;
     }
+  }
+
+  async notifyUser(userId: string, event: NotificationType, payload: Record<string, unknown>) {
+    await this.notificationsGateway.notifyUser(userId, event, payload);
   }
 }

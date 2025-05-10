@@ -4,6 +4,8 @@ import { PaymentVerificationService } from '../services/payment-verification.ser
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles, UserRole } from '../decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
+import { ApiVerifyPayment, ApiRejectPayment } from '../../../client/swagger/client.swagger';
+import { VerifyPaymentDto, RejectPaymentDto, PaymentVerificationResponseDto } from '../../../client/interfaces/client.swagger';
 
 @Controller('payment-verification')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -12,20 +14,24 @@ export class PaymentVerificationController {
 
   @Post('verify')
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  async verifyPayment(
-    @Body() data: { transactionId: string; verifiedBy: string }
-  ) {
+  @ApiVerifyPayment()
+  async verifyPayment(@Body() data: VerifyPaymentDto) {
     return this.paymentVerificationService.verifyPayment(
       data.transactionId,
-      data.verifiedBy
+      data.verifiedBy,
+      {
+        bankId: data.bankId,
+        bankTransactionId: data.bankTransactionId,
+        screenshotUrl: data.screenshotUrl,
+        additionalNotes: data.additionalNotes
+      }
     );
   }
 
   @Post('reject')
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  async rejectPayment(
-    @Body() data: { transactionId: string; rejectedBy: string; reason: string }
-  ) {
+  @ApiRejectPayment()
+  async rejectPayment(@Body() data: RejectPaymentDto) {
     return this.paymentVerificationService.rejectPayment(
       data.transactionId,
       data.rejectedBy,
@@ -35,20 +41,22 @@ export class PaymentVerificationController {
 
   @GrpcMethod('PaymentVerificationService', 'VerifyPayment')
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  async verifyPaymentGrpc(data: { transactionId: string; verifiedBy: string }) {
+  async verifyPaymentGrpc(data: VerifyPaymentDto) {
     return this.paymentVerificationService.verifyPayment(
       data.transactionId,
-      data.verifiedBy
+      data.verifiedBy,
+      {
+        bankId: data.bankId,
+        bankTransactionId: data.bankTransactionId,
+        screenshotUrl: data.screenshotUrl,
+        additionalNotes: data.additionalNotes
+      }
     );
   }
 
   @GrpcMethod('PaymentVerificationService', 'RejectPayment')
   @Roles(UserRole.MODERATOR, UserRole.ADMIN)
-  async rejectPaymentGrpc(data: { 
-    transactionId: string; 
-    rejectedBy: string; 
-    reason: string 
-  }) {
+  async rejectPaymentGrpc(data: RejectPaymentDto) {
     return this.paymentVerificationService.rejectPayment(
       data.transactionId,
       data.rejectedBy,

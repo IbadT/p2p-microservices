@@ -223,6 +223,18 @@ export class ConfirmPaymentDto {
 
   @ApiProperty({ description: 'Референс платежа' })
   paymentReference: string;
+
+  @ApiProperty({ description: 'ID банка', required: false })
+  bankId?: string;
+
+  @ApiProperty({ description: 'ID банковской транзакции', required: false })
+  bankTransactionId?: string;
+
+  @ApiProperty({ description: 'URL скриншота платежа', required: false })
+  screenshotUrl?: string;
+
+  @ApiProperty({ description: 'Дополнительные заметки', required: false })
+  additionalNotes?: string;
 }
 
 export class ConfirmReceiptDto {
@@ -586,4 +598,46 @@ export class Comment {
 
   @ApiProperty({ description: 'Creation date of the comment' })
   createdAt: string;
+}
+
+export class VerifyPaymentDto {
+  @ApiProperty({ description: 'ID транзакции', example: '123e4567-e89b-12d3-a456-426614174000' })
+  transactionId: string;
+
+  @ApiProperty({ description: 'ID верификатора', example: '123e4567-e89b-12d3-a456-426614174000' })
+  verifiedBy: string;
+
+  @ApiProperty({ description: 'ID банка', required: false, example: 'bank123' })
+  bankId?: string;
+
+  @ApiProperty({ description: 'ID банковской транзакции', required: false, example: 'tx123' })
+  bankTransactionId?: string;
+
+  @ApiProperty({ description: 'URL скриншота платежа', required: false, example: 'https://example.com/screenshot.jpg' })
+  screenshotUrl?: string;
+
+  @ApiProperty({ description: 'Дополнительные заметки', required: false, example: 'Платеж подтвержден' })
+  additionalNotes?: string;
+}
+
+export class RejectPaymentDto {
+  @ApiProperty({ description: 'ID транзакции', example: '123e4567-e89b-12d3-a456-426614174000' })
+  transactionId: string;
+
+  @ApiProperty({ description: 'ID отклонившего', example: '123e4567-e89b-12d3-a456-426614174000' })
+  rejectedBy: string;
+
+  @ApiProperty({ description: 'Причина отклонения', example: 'Неверная сумма платежа' })
+  reason: string;
+}
+
+export class PaymentVerificationResponseDto {
+  @ApiProperty({ description: 'Успешность операции', example: true })
+  success: boolean;
+
+  @ApiProperty({ description: 'Сообщение о результате', example: 'Payment verified successfully' })
+  message: string;
+
+  @ApiProperty({ description: 'Обновленная транзакция', required: false })
+  transaction?: any;
 } 
